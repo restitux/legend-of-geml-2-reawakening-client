@@ -2,7 +2,7 @@
 
 set -e
 
-rm -r dist
+rm -rf dist
 mkdir dist
 mkdir dist/res
 
