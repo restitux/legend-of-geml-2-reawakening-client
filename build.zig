@@ -7,16 +7,17 @@ pub fn build(b: *std.build.Builder) void {
 
     const target = b.standardTargetOptions(.{});
 
-    const lib = b.addStaticLibrary("gamejam", "src/main.zig");
+    const lib = b.addStaticLibrary("gamejam", "src/main.c");
     lib.addIncludeDir("/home/robby/.emscripten_cache/sysroot/include");
+    lib.addIncludeDir(".");
     lib.setBuildMode(mode);
     lib.setTarget(target);
     //lib.linkLibC();
     lib.install();
 
-    const main_tests = b.addTest("src/main.zig");
-    main_tests.setBuildMode(mode);
+    //const main_tests = b.addTest("src/main.zig");
+    //main_tests.setBuildMode(mode);
 
-    const test_step = b.step("test", "Run library tests");
-    test_step.dependOn(&main_tests.step);
+    //const test_step = b.step("test", "Run library tests");
+    //test_step.dependOn(&main_tests.step);
 }
