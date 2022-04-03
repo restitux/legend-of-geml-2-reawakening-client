@@ -1,3 +1,4 @@
+#include <SDL2/SDL_rwops.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -8,8 +9,12 @@
 #include "emscripten/fetch.h"
 
 
-#include "SDL2/SDL.h"
+#include <SDL2/SDL.h>
 #include <SDL2/SDL_render.h>
+#include <SDL2/SDL_rwops.h>
+#include <SDL2/SDL_surface.h>
+#include <SDL2/SDL_image.h>
+
 
 #define SCREEN_WIDTH 1000
 #define SCREEN_HEIGHT 1000
@@ -24,7 +29,7 @@ typedef struct {
 typedef struct {
     char *path;
     bool completed;
-    uint8_t *data;
+    SDL_Texture *texture;
 } Asset;
 
 typedef struct {
@@ -66,7 +71,14 @@ typedef struct {
     RenderData render_data;
     Map map;
     Camera camera;
+    Player player;
 } GameState;
+
+typedef struct {
+    size_t asset_index;
+    AssetStore asset_store;
+    RenderData render_data;
+} AssetDownloadCallbackData;
 
 void mainLoop(void *userdata) {
 
@@ -79,54 +91,110 @@ void mainLoop(void *userdata) {
         }
     }
 
+    // handle inputs
+    //SDL_PumpEvents();
+
+    //int mouse_x, mouse_y;
+    //uint32_t buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+
+    //printf("%d\n", buttons);
+
+    //SDL_Log("Mouse cursor is at %d, %d", mouse_x, mouse_y);
+    //if ((buttons & SDL_BUTTON_LMASK) != 0) {
+    //    SDL_Log("Mouse Button 1 (left) is pressed.");
+    //}
+    {
+        Player *player = &game_state->player;
+        player->pos.x++;
+        player->pos.y++;
+    }
+
+
+    {
+        Camera *camera = &game_state->camera;
+        Player player = game_state->player;
+
+        camera->pos.x = player.pos.x - ((1 / camera->scale) / 2);
+        camera->pos.y = player.pos.y - ((1 / camera->scale) / 2);
+    }
+
+
 
     // Render Map
-    Camera camera = game_state->camera;
-    Map map = game_state->map;
+    {
+        Camera camera = game_state->camera;
+        Map map = game_state->map;
 
-    int block_w = SCREEN_WIDTH * camera.scale;
-    int block_h = SCREEN_HEIGHT * camera.scale;
+        int block_w = SCREEN_WIDTH * camera.scale;
+        int block_h = SCREEN_HEIGHT * camera.scale;
 
-    int blocks_per_screen_w = (SCREEN_WIDTH / block_w) + 1;
-    int blocks_per_screen_h = (SCREEN_HEIGHT / block_h) + 1;
+        int blocks_per_screen_w = (SCREEN_WIDTH / block_w) + 1;
+        int blocks_per_screen_h = (SCREEN_HEIGHT / block_h) + 1;
 
-    double integral_x;
-    double fractional_x = modf(camera.pos.x / block_w, &integral_x);
-    double integral_y;
-    double fractional_y = modf(camera.pos.y / block_h, &integral_y);
-
-
-    int base_block_x = (int)integral_x;
-    int offset_x = -(int)(fractional_x * block_w);
-    int base_block_y = (int)integral_y;
-    int offset_y = -(int)(fractional_y * block_h);
+        double integral_x;
+        double fractional_x = modf(camera.pos.x / block_w, &integral_x);
+        double integral_y;
+        double fractional_y = modf(camera.pos.y / block_h, &integral_y);
 
 
-    SDL_Renderer *renderer = game_state->render_data.renderer;
+        int base_block_x = (int)integral_x;
+        int offset_x = -(int)(fractional_x * block_w);
+        int base_block_y = (int)integral_y;
+        int offset_y = -(int)(fractional_y * block_h);
 
-    SDL_Rect r = {
-        .x = 0,
-        .y = 0,
-        .w = block_w,
-        .h = block_h,
-    };
-    for (int y = 0; y < blocks_per_screen_h; y++) {
-        r.y = offset_y + (block_h * y);
-        for (int x = 0; x < blocks_per_screen_w; x++) {
-            r.x = offset_x + (block_w * x);
-            size_t block_index = ((base_block_y  + y) * map.width) + (base_block_x + x);
-            if (map.blocks[block_index].type == GRASS) {
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            } else {
-                SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+
+        SDL_Renderer *renderer = game_state->render_data.renderer;
+
+        SDL_Rect r = {
+            .x = 0,
+            .y = 0,
+            .w = block_w,
+            .h = block_h,
+        };
+        for (int y = 0; y < blocks_per_screen_h; y++) {
+            r.y = offset_y + (block_h * y);
+            for (int x = 0; x < blocks_per_screen_w; x++) {
+                r.x = offset_x + (block_w * x);
+                size_t block_index = ((base_block_y  + y) * map.width) + (base_block_x + x);
+                if (map.blocks[block_index].type == GRASS) {
+                    //SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                    //SDL_RenderFillRect(renderer, &r);
+                    SDL_RenderCopy(renderer, game_state->asset_store.assets[0].texture, NULL, &r);
+                } else {
+                    //SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+                    //SDL_RenderFillRect(renderer, &r);
+                    SDL_RenderCopy(renderer, game_state->asset_store.assets[1].texture, NULL, &r);
+                }
             }
-            SDL_RenderFillRect(renderer, &r);
         }
     }
-    SDL_RenderPresent(renderer);
 
 
+    // Draw player
+    {
+        Camera camera = game_state->camera;
+        Player *player = &game_state->player;
 
+        int player_w = SCREEN_WIDTH * camera.scale;
+        int player_h = SCREEN_HEIGHT * camera.scale;
+
+        SDL_Rect r = {
+            //.x = (int)player->pos.x + (SCREEN_WIDTH / 2),
+            .x = (SCREEN_WIDTH / 2) - (player_w / 2),
+            .y = (SCREEN_HEIGHT / 2) - (player_h / 2),
+            //.y = (int)player->pos.y + (SCREEN_HEIGHT / 2),
+            .w = player_w,
+            .h = player_h,
+        };
+
+        SDL_Renderer *renderer = game_state->render_data.renderer;
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        SDL_RenderFillRect(renderer, &r);
+
+    }
+
+    SDL_RenderPresent(game_state->render_data.renderer);
     //SDL_Renderer *renderer = game_state->render_data.renderer;
 
 
@@ -147,22 +215,42 @@ void mainLoop(void *userdata) {
 }
 
 void downloadSucceededCallback(emscripten_fetch_t result) {
-    Asset* asset = (Asset*) result.userData;
-    printf("Asset Path: %s\n", asset->path);
+    AssetDownloadCallbackData *data = (AssetDownloadCallbackData*) result.userData;
+    Asset *asset = data->asset_store.assets + data->asset_index;
+
     printf("Downloaded file: %s", result.url);
     printf(" (%ld bytes)\n", result.numBytes);
 
-    asset->data = malloc(result.numBytes);
-    for (size_t i = 0; i < result.numBytes; i++) {
-        asset->data[i] = result.data[i];
+    // load image data as SDL surface
+    SDL_RWops *rw = SDL_RWFromMem((void*)result.data, result.numBytes);
+    SDL_Surface *temp = IMG_Load_RW(rw, 1);
+    if (temp == NULL) {
+        printf("Image %s failed to load: %s\n", asset->path, IMG_GetError());
+    } else {
+        printf("Image %s loaded sucessfully\n", asset->path);
     }
+
+    asset->texture = SDL_CreateTextureFromSurface(data->render_data.renderer, temp);
+    if (asset->texture == NULL) {
+         fprintf(stderr, "CreateTextureFromSurface for image %s failed: %s\n", asset->path, SDL_GetError());
+    } else {
+        printf("Converted image %s to texture successfully\n", asset->path);
+    }
+
+    SDL_FreeSurface(temp);
+
     asset->completed = true;
+
+    //asset->data = malloc(result.numBytes);
+    //for (size_t i = 0; i < result.numBytes; i++) {
+    //    asset->data[i] = result.data[i];
+    //}
 
     emscripten_fetch_close(&result);
 
 }
 
-AssetStore startAssetDownload() {
+AssetStore startAssetDownload(RenderData render_data) {
     char *asset_names[] = {
         "/res/rpg16/default_grass.png",
         "/res/rpg16/default_sand.png",
@@ -170,6 +258,11 @@ AssetStore startAssetDownload() {
     size_t num_assets = sizeof(asset_names) / sizeof(char *);
 
     Asset* assets = malloc(sizeof(Asset) * (num_assets));
+
+    AssetStore asset_store = {
+        .assets = assets,
+        .size = num_assets,
+    };
 
 
     for (size_t i = 0; i < (num_assets); i++) {
@@ -185,16 +278,24 @@ AssetStore startAssetDownload() {
 
         attr.onsuccess = downloadSucceededCallback;
         assets[i].path = strdup(asset_names[i]);
-        attr.userData = assets + i;
+        attr.userData = malloc(sizeof(AssetDownloadCallbackData));
+        *((AssetDownloadCallbackData*)attr.userData) = (AssetDownloadCallbackData) {
+            .asset_index = i,
+            .asset_store = asset_store,
+            .render_data = render_data,
+        };
 
+//typedef struct {
+//    size_t asset_index;
+//    AssetStore *asset_store;
+//    RenderData *render_data;
+//} AssetDownloadCallbackData;
         emscripten_fetch(&attr, asset_names[i]);
 
     }
 
-    return (AssetStore) {
-        .assets = assets,
-        .size = num_assets,
-    };
+    return asset_store;
+
 }
 
 
@@ -202,13 +303,19 @@ void main() {
     printf("Creating game state\n");
     GameState *game_state = malloc(sizeof(GameState));
 
+    game_state->player = (Player) {
+        .pos = (Pos) {
+            .x = 100,
+            .y = 100,
+        },
+    };
 
     game_state->camera = (Camera) {
         .pos = (Pos) {
-            .x = 25,
-            .y = 25,
+            .x = 0,
+            .y = 0,
         },
-        .scale = 0.01,
+        .scale = 0.05,
     };
 
     Block* blocks = malloc(MAP_WIDTH * MAP_HEIGHT * sizeof(Block));
@@ -231,13 +338,14 @@ void main() {
     };
 
 
-    printf("Startinga asset downloads\n");
-    game_state->asset_store = startAssetDownload();
 
     printf("Setting up window\n");
     SDL_Init(SDL_INIT_VIDEO);
     game_state->render_data.window = SDL_CreateWindow("test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     game_state->render_data.renderer = SDL_CreateRenderer(game_state->render_data.window, -1, 0);
+
+    printf("Starting asset downloads\n");
+    game_state->asset_store = startAssetDownload(game_state->render_data);
 
     int simulate_infinite_loop = 1; // call the function repeatedly
     int fps = -1; // call the functios as fast as the browser want to render (typically 60fps)
