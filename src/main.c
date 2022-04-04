@@ -287,8 +287,6 @@ void mainLoop(void *userdata) {
                 enemy.entity.pos.x <= camera_end.x &&
                 camera_start.y <= enemy.entity.pos.y &&
                 enemy.entity.pos.y <= camera_end.y) {
-                printf("Enemy at (%f, %f) in on screen\n", enemy.entity.pos.x,
-                       enemy.entity.pos.y);
 
                 float player_w = PLAYER_WIDTH * camera.scale_x;
                 float player_h = PLAYER_WIDTH * camera.scale_y;
@@ -310,8 +308,6 @@ void mainLoop(void *userdata) {
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
                 SDL_RenderFillRect(renderer, &r);
             } else {
-                printf("Enemy at (%f, %f) in off screen\n", enemy.entity.pos.x,
-                       enemy.entity.pos.y);
                 continue;
             }
         }
