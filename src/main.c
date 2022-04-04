@@ -3,6 +3,18 @@
 #include "types.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+char *create_shrine_visit_json(DeathReport report) {
+    char *json_out = malloc(50 + strlen(report.username) + 1 + 3 + 3);
+    sprintf(
+        json_out,
+        "{\"Username\":\"%s\", \"Sacrifice\":%d, \"Pos\":{\"X\"=%d, \"Y\":%d}}",
+        report.username, report.sacrifice, report.death_pos.x,
+        report.death_pos.y);
+    printf("%s\n", json_out);
+    return json_out;
+}
 
 Enemy create_enemy(Asset *asset, Posf spawn_location, EnemyType e) {
     int w = 0;
