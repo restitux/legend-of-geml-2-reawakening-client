@@ -169,6 +169,11 @@ typedef struct {
     RenderData render_data;
 } AssetDownloadCallbackData;
 
+typedef struct {
+    Map *map;
+    MultiplayerState *multistate;
+} MultiplayerStateSyncCallbackData;
+
 void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
                  SDL_Rect *dst) {
     SDL_RenderCopy(renderer, a.texture,
@@ -205,16 +210,20 @@ void renderTile(SDL_Renderer *renderer, BlockType type, Asset a, SDL_Rect *r) {
         renderAsset(renderer, a, 16, 16, PATH_END_RIGHT_X, PATH_END_RIGHT_Y, r);
         break;
     case PATH_CORNER_DOWN_RIGHT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_RIGHT_X, PATH_CORNER_DOWN_RIGHT_Y, r);
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_RIGHT_X,
+                    PATH_CORNER_DOWN_RIGHT_Y, r);
         break;
     case PATH_CORNER_DOWN_LEFT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_LEFT_X, PATH_CORNER_DOWN_LEFT_Y, r);
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_LEFT_X,
+                    PATH_CORNER_DOWN_LEFT_Y, r);
         break;
     case PATH_CORNER_UP_RIGHT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_RIGHT_X, PATH_CORNER_UP_RIGHT_Y, r);
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_RIGHT_X,
+                    PATH_CORNER_UP_RIGHT_Y, r);
         break;
     case PATH_CORNER_UP_LEFT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_LEFT_X, PATH_CORNER_UP_LEFT_Y, r);
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_LEFT_X,
+                    PATH_CORNER_UP_LEFT_Y, r);
         break;
     case SHRINE:
         renderAsset(renderer, a, 16, 16, SHRINE_X, SHRINE_Y, r);
@@ -567,7 +576,8 @@ void stateDownloadSucceded(emscripten_fetch_t result) {
 
     printf("url: (%s)\n", result.url);
 
-    MultiplayerState *state = (MultiplayerState *)result.userData;
+    MultiplayerStateSyncCallbackData *data = (MultiplayerStateSyncCallbackData*)result.userData;
+    MultiplayerState* state = data->multistate;
 
     struct json_value_s *root = json_parse(result.data, result.numBytes);
     struct json_object_s *root_object = (struct json_object_s *)root->payload;
@@ -618,10 +628,23 @@ void stateDownloadSucceded(emscripten_fetch_t result) {
         printf("}\n");
     }
 
+    // TODO: add drawPaths call here once server is configured
+
     state->sync_state = SYNCED;
 }
 
-MultiplayerState *startStateDownload() {
+MultiplayerState *startStateDownload(Map *map) {
+
+    MultiplayerStateSyncCallbackData *data =
+        malloc(sizeof(MultiplayerStateSyncCallbackData));
+    data->multistate = malloc(sizeof(MultiplayerState));
+    *(data->multistate) = (MultiplayerState){
+        .sync_state = UNSYNCED,
+        .shrines = NULL,
+        .shrines_len = 0,
+    };
+    data->map = map;
+
     char *state_file = "/res/shrine_list.json";
 
     emscripten_fetch_attr_t attr;
@@ -632,12 +655,7 @@ MultiplayerState *startStateDownload() {
     attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
 
     attr.onsuccess = stateDownloadSucceded;
-    attr.userData = malloc(sizeof(MultiplayerState));
-    *((MultiplayerState *)attr.userData) = (MultiplayerState){
-        .sync_state = UNSYNCED,
-        .shrines = NULL,
-        .shrines_len = 0,
-    };
+    attr.userData = data;
 
     emscripten_fetch(&attr, state_file);
     return (MultiplayerState *)attr.userData;
@@ -696,16 +714,17 @@ void drawPaths(Posi *shrines, size_t num_shrines, Block *blocks) {
                     for (int y = start.y + 2; y <= end.y - 1; y++) {
                         blocks[y * MAP_WIDTH + start.x].type = PATH_VERT;
                     }
-                    blocks[end.y * MAP_WIDTH + start.x].type = PATH_CORNER_UP_RIGHT;
+                    blocks[end.y * MAP_WIDTH + start.x].type =
+                        PATH_CORNER_UP_RIGHT;
                 } else if (start.y > end.y) {
                     blocks[((start.y - 1) * MAP_WIDTH) + start.x].type =
                         PATH_END_DOWN;
                     for (int y = start.y - 2; y >= end.y + 1; y--) {
                         blocks[y * MAP_WIDTH + start.x].type = PATH_VERT;
                     }
-                    blocks[end.y * MAP_WIDTH + start.x].type = PATH_CORNER_DOWN_RIGHT;
+                    blocks[end.y * MAP_WIDTH + start.x].type =
+                        PATH_CORNER_DOWN_RIGHT;
                 }
-
 
                 // plot x path
                 for (int x = start.x + 1; x <= end.x - 2; x++) {
@@ -714,35 +733,34 @@ void drawPaths(Posi *shrines, size_t num_shrines, Block *blocks) {
                 blocks[end.y * MAP_WIDTH + (end.x - 1)].type = PATH_END_RIGHT;
             } else {
                 // plot x path
-                blocks[start.y * MAP_WIDTH + (start.x + 1)].type = PATH_END_LEFT;
+                blocks[start.y * MAP_WIDTH + (start.x + 1)].type =
+                    PATH_END_LEFT;
                 for (int x = start.x + 2; x <= end.x - 1; x++) {
                     blocks[start.y * MAP_WIDTH + x].type = PATH_HORIZ;
                 }
 
                 // plot y path
                 if (start.y < end.y) {
-                    blocks[start.y * MAP_WIDTH + end.x].type = PATH_CORNER_DOWN_LEFT;
+                    blocks[start.y * MAP_WIDTH + end.x].type =
+                        PATH_CORNER_DOWN_LEFT;
                     for (int y = start.y + 1; y <= end.y - 2; y++) {
                         blocks[y * MAP_WIDTH + end.x].type = PATH_VERT;
                     }
                     blocks[((end.y - 1) * MAP_WIDTH) + end.x].type =
                         PATH_END_DOWN;
                 } else if (start.y > end.y) {
-                    blocks[start.y * MAP_WIDTH + end.x].type = PATH_CORNER_UP_LEFT;
+                    blocks[start.y * MAP_WIDTH + end.x].type =
+                        PATH_CORNER_UP_LEFT;
                     for (int y = start.y - 1; y >= end.y + 2; y--) {
                         blocks[y * MAP_WIDTH + end.x].type = PATH_VERT;
                     }
                     blocks[((end.y + 1) * MAP_WIDTH) + end.x].type =
                         PATH_END_UP;
-
                 }
             }
-
         }
-
     }
 }
-
 
 int main() {
     printf("Creating game state\n");
@@ -830,7 +848,7 @@ int main() {
     game_state->asset_store = startAssetDownload(game_state->render_data);
 
     printf("Starting game state downloads\n");
-    game_state->multistate = startStateDownload();
+    game_state->multistate = startStateDownload(&game_state->map);
 
     int simulate_infinite_loop = 1; // call the function repeatedly
     int fps = -1; // call the functios as fast as the browser want to render
