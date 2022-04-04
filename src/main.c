@@ -305,13 +305,6 @@ void mainLoop(void *userdata) {
                     .h = player_h,
                 };
 
-                // r = (SDL_Rect){
-                //     .x = 40,
-                //     .y = 40,
-                //     .w = player_w,
-                //     .h = player_h,
-                // };
-
                 SDL_Renderer *renderer = game_state->render_data.renderer;
 
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
