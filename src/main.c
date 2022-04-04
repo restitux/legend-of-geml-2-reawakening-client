@@ -29,6 +29,53 @@ void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
                    dst);
 }
 
+#define PLAYER_SPRITE_W 31
+#define PLAYER_SPRITE_H 36
+
+void renderSprite(SDL_Renderer *renderer, AnimationFrame f, Asset a,
+                  SDL_Rect *r) {
+    switch (f) {
+    case UP0:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 0, r);
+        break;
+    case UP1:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 0, r);
+        break;
+    case UP2:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 0, r);
+        break;
+    case RIGHT0:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 1, r);
+        break;
+    case RIGHT1:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 1, r);
+        break;
+    case RIGHT2:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 1, r);
+        break;
+    case DOWN0:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 2, r);
+        break;
+    case DOWN1:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 2, r);
+        break;
+    case DOWN2:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 2, r);
+        break;
+    case LEFT0:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 3, r);
+        break;
+    case LEFT1:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 3, r);
+        break;
+    case LEFT2:
+        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 3, r);
+        break;
+    default:
+        break;
+    }
+}
+
 void renderTile(SDL_Renderer *renderer, BlockType type, Asset a, SDL_Rect *r) {
     switch (type) {
     case GRASS:
@@ -164,6 +211,46 @@ void mainLoop(void *userdata) {
             player->pos.y += player->vel.y;
         } else if (player->vel.y > 0 && player->pos.y < map.height) {
             player->pos.y += player->vel.y;
+        }
+    }
+
+    // Animate player
+    {
+        Player *player = &game_state->player;
+
+        // update animation direction
+        if (player->vel.x > 0.01) {
+            if (player->animation.f < RIGHT0 || player->animation.f > RIGHT2) {
+                player->animation.f = RIGHT0;
+            }
+        } else if (player->vel.x < -0.1) {
+            if (player->animation.f < LEFT0 || player->animation.f > LEFT2) {
+                player->animation.f = LEFT0;
+            }
+        } else if (player->vel.y > 0.1) {
+            if (player->animation.f < DOWN0 || player->animation.f > DOWN2) {
+                player->animation.f = DOWN0;
+            }
+        } else if (player->vel.y < -0.1) {
+            if (player->animation.f < UP0 || player->animation.f > UP2) {
+                player->animation.f = UP0;
+            }
+        }
+
+        if (fabs(player->vel.x) < 0.01 && fabs(player->vel.y) < 0.01) {
+            // if player is not moving, use neutral frame
+            player->animation.f = ((player->animation.f / 3) * 3) + 1;
+            player->animation.counter = 0;
+        } else if (player->animation.counter >= player->animation.rate) {
+            player->animation.counter = 0;
+
+            if (player->animation.f % 3 == 2) {
+                player->animation.f -= 2;
+            } else {
+                player->animation.f += 1;
+            }
+        } else {
+            player->animation.counter++;
         }
     }
 
@@ -352,8 +439,12 @@ void mainLoop(void *userdata) {
 
         SDL_Renderer *renderer = game_state->render_data.renderer;
 
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-        SDL_RenderFillRect(renderer, &r);
+        // void renderSprite(SDL_Renderer *renderer, AnimationFrame f, Asset a,
+        //                   SDL_Rect *r) {
+        renderSprite(renderer, player->animation.f,
+                     game_state->asset_store.assets[3], &r);
+        //  SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        //  SDL_RenderFillRect(renderer, &r);
     }
 
     SDL_RenderPresent(game_state->render_data.renderer);
@@ -400,6 +491,7 @@ AssetStore startAssetDownload(RenderData render_data) {
         "/res/rpg16/default_grass.png",
         "/res/rpg16/default_sand.png",
         "/res/TilesetGrass/overworld_tileset_grass.png",
+        "/res/rpgsprites1/mage_f.png",
     };
     size_t num_assets = sizeof(asset_names) / sizeof(char *);
 
@@ -689,9 +781,16 @@ int main() {
                                           .x = 100.0,
                                           .y = 100.0,
                                       },
-                                  .vel = (Posf){
-                                      .x = 0.0,
-                                      .y = 0.0,
+                                  .vel =
+                                      (Posf){
+                                          .x = 0.0,
+                                          .y = 0.0,
+                                      },
+                                  .animation = (Animation){
+                                      .animating = false,
+                                      .f = DOWN0,
+                                      .counter = 0,
+                                      .rate = 20,
                                   }};
     game_state->enemies = (Enemies){
         .enemies = malloc(sizeof(Enemy) * 1),
