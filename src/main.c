@@ -1,4 +1,7 @@
+#include "SDL2/SDL_keycode.h"
+#include "SDL2/SDL_stdinc.h"
 #include "types.h"
+#include <math.h>
 #include <stdio.h>
 
 Enemy create_enemy(Posf spawn_location) {
@@ -15,6 +18,55 @@ Enemy create_enemy(Posf spawn_location) {
         .inverse_strafe = false,
         .state = StateIdle,
     };
+}
+
+bool random_bool(float true_chance) {
+    int random = rand();
+    float random_float = ((float)random) / ((float)RAND_MAX);
+    return random_float < true_chance;
+}
+
+float posf_magnitute(Posf pos) { return sqrtf(pos.x * pos.x + pos.y * pos.y); }
+
+Posf posf_reverse(Posf pos) {
+    return (Posf){
+        .x = -pos.x,
+        .y = -pos.y,
+    };
+}
+
+Posf posf_subtract(Posf a, Posf b) {
+    return (Posf){
+        .x = a.x - b.x,
+        .y = a.y - b.y,
+    };
+}
+
+Posf posf_add(Posf a, Posf b) {
+    return (Posf){
+        .x = a.x + b.x,
+        .y = a.y + b.y,
+    };
+}
+
+float posf_distance(Posf from, Posf to) {
+    Posf dist_vec = posf_subtract(from, to);
+
+    return posf_magnitute(dist_vec);
+}
+
+Posf posf_set_magnitute(Posf pos, float mag) {
+    float current_mag = posf_magnitute(pos);
+    float scale_factor = current_mag / mag;
+    return (Posf){
+        .x = pos.x / scale_factor,
+        .y = pos.y / scale_factor,
+    };
+}
+
+Posf posf_direction(Posf from, Posf to) {
+    Posf out = posf_subtract(from, to);
+    return posf_set_magnitute(out, 1);
 }
 
 void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
@@ -123,7 +175,33 @@ void renderTile(SDL_Renderer *renderer, BlockType type, Asset a, SDL_Rect *r) {
     }
 }
 
-void processInput(Player *player, Camera *camera, SDL_Event *e) {
+float vector_angle(Posf a, Posf b) {
+    float x = a.x * b.y - b.x * a.y;
+    float y = a.x * b.x + a.y * b.y;
+    return atan2f(x, y);
+}
+
+void handle_player_attack(Player *player, Enemies *enemies) {
+    for (size_t i = 0; i < enemies->num_enemies; i++) {
+        Enemy *e = &enemies->enemies[i];
+        Posf dir = posf_direction(e->entity.pos, player->pos);
+        float angle = vector_angle(player->facing, dir);
+        if ((angle > 0 && angle < M_PI) || (angle < 0 && angle > -M_PI) ||
+            angle == 0) {
+            if (posf_distance(player->pos, e->entity.pos) <
+                PLAYER_ATTACK_RANGE) {
+                e->entity.health -= 20;
+                Posf attack_dir = posf_direction(e->entity.pos, player->pos);
+                Posf attack_vec =
+                    posf_set_magnitute(attack_dir, PLAYER_KNOCKBACK_AMOUNT);
+                e->entity.pos = posf_add(e->entity.pos, attack_vec);
+            }
+        }
+    }
+}
+
+void processInput(Player *player, Camera *camera, SDL_Event *e,
+                  Enemies *enemies) {
     if (e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
         case SDLK_UP:
@@ -149,6 +227,9 @@ void processInput(Player *player, Camera *camera, SDL_Event *e) {
         default:
             break;
         }
+        if (posf_magnitute(player->vel) > 0) {
+            player->facing = posf_set_magnitute(player->vel, 1);
+        }
     } else if (e->type == SDL_KEYUP) {
         switch (e->key.keysym.sym) {
         case SDLK_UP:
@@ -162,6 +243,9 @@ void processInput(Player *player, Camera *camera, SDL_Event *e) {
             break;
         case SDLK_RIGHT:
             player->vel.x = 0;
+            break;
+        case SDLK_q:
+            handle_player_attack(player, enemies);
             break;
         default:
             break;
@@ -192,11 +276,12 @@ void mainLoop(void *userdata) {
         Player *player = &game_state->player;
         Camera *camera = &game_state->camera;
         Map map = game_state->map;
+        Enemies *enemies = &game_state->enemies;
 
         SDL_Event e;
 
         while (SDL_PollEvent(&e) != 0) {
-            processInput(player, camera, &e);
+            processInput(player, camera, &e, enemies);
         }
 
         if (player->vel.x < 0 && player->pos.x > 0) {
@@ -908,55 +993,6 @@ int main() {
 #define ENEMY_ATTACK_DAMAGE 20
 #define ENEMY_KNOCKBACK_AMOUNT 1
 
-bool random_bool(float true_chance) {
-    int random = rand();
-    float random_float = ((float)random) / ((float)RAND_MAX);
-    return random_float < true_chance;
-}
-
-float posf_magnitute(Posf pos) { return sqrtf(pos.x * pos.x + pos.y * pos.y); }
-
-Posf posf_reverse(Posf pos) {
-    return (Posf){
-        .x = -pos.x,
-        .y = -pos.y,
-    };
-}
-
-Posf posf_subtract(Posf a, Posf b) {
-    return (Posf){
-        .x = a.x - b.x,
-        .y = a.y - b.y,
-    };
-}
-
-Posf posf_add(Posf a, Posf b) {
-    return (Posf){
-        .x = a.x + b.x,
-        .y = a.y + b.y,
-    };
-}
-
-float posf_distance(Posf from, Posf to) {
-    Posf dist_vec = posf_subtract(from, to);
-
-    return posf_magnitute(dist_vec);
-}
-
-Posf posf_set_magnitute(Posf pos, float mag) {
-    float current_mag = posf_magnitute(pos);
-    float scale_factor = current_mag / mag;
-    return (Posf){
-        .x = pos.x / scale_factor,
-        .y = pos.y / scale_factor,
-    };
-}
-
-Posf posf_direction(Posf from, Posf to) {
-    Posf out = posf_subtract(from, to);
-    return posf_set_magnitute(out, 1);
-}
-
 void entity_move(Entity *e, Map map) {
     printf("entity vel vector (%f, %f)", e->vel.x, e->vel.y);
     if (e->vel.x < 0 && e->pos.x > 0) {
@@ -1099,5 +1135,5 @@ void enemy_update(Enemy *e, Entity *target, Map map) {
         enemy_cooldown(e, target);
         break;
     }
-    entity_move(e, map);
+    entity_move(&e->entity, map);
 }
