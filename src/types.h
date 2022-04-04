@@ -138,6 +138,7 @@ typedef struct {
 typedef struct {
     Posf pos;
     Posf vel;
+    float health;
 } Entity;
 
 typedef struct {
@@ -165,7 +166,7 @@ typedef struct {
 } Enemy;
 
 typedef struct {
-    Enemy* enemies;
+    Enemy *enemies;
     size_t num_enemies;
 } Enemies;
 
