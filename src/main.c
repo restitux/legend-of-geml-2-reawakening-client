@@ -305,6 +305,7 @@ void mainLoop(void *userdata) {
             Entity player_entity = {
                 .pos = player->pos,
                 .vel = player->vel,
+                .health = player->health,
             };
 
             Enemy *e = &enemies->enemies[i];
@@ -312,6 +313,7 @@ void mainLoop(void *userdata) {
             enemy_update(e, &player_entity, map);
 
             player->pos = player_entity.pos;
+            player->health = player_entity.health;
         }
     }
 
@@ -788,6 +790,7 @@ int main() {
                                           .x = 0.0,
                                           .y = 0.0,
                                       },
+                                  .health = 80,
                                   .animation = (Animation){
                                       .animating = false,
                                       .f = DOWN0,
