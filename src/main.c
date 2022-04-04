@@ -298,18 +298,20 @@ void mainLoop(void *userdata) {
     // Move Enemy
     {
         Enemies *enemies = &game_state->enemies;
-        Player player = game_state->player;
+        Player *player = &game_state->player;
         Map map = game_state->map;
 
         for (size_t i = 0; i < enemies->num_enemies; i++) {
             Entity player_entity = {
-                .pos = player.pos,
-                .vel = player.vel,
+                .pos = player->pos,
+                .vel = player->vel,
             };
 
             Enemy *e = &enemies->enemies[i];
 
             enemy_update(e, &player_entity, map);
+
+            player->pos = player_entity.pos;
         }
     }
 
