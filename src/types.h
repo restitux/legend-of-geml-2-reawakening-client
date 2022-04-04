@@ -33,6 +33,9 @@
 #define PLAYER_WIDTH 1
 #define PLAYER_HEIGHT 1
 
+#define PLAYER_ATTACK_RANGE 1
+#define PLAYER_KNOCKBACK_AMOUNT 1
+
 #define DEFAULT_BLOCKS_PER_SCREEN_W 20.0
 #define DEFAULT_BLOCKS_PER_SCREEN_H 20.0
 #define CAMERA_SCALE_DEFAULT_W 50
@@ -155,7 +158,9 @@ typedef struct {
 typedef struct {
     Posf pos;
     Posf vel;
+    Posf facing;
     Animation animation;
+    float health;
 } Player;
 
 typedef struct {
