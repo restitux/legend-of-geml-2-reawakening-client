@@ -46,6 +46,8 @@
 #define CAMERA_SCROLL_INC CAMERA_MAX_SCROLL / 10.0
 
 #define PLAYER_VELOCTY 0.12
+#define PLAYER_KNOCKBACK_AMOUNT 10
+#define PLAYER_ATTACK_RANGE 2
 
 typedef struct {
     int x;
@@ -89,18 +91,18 @@ typedef enum {
 } BlockType;
 
 typedef enum {
-    UP0 = 0,
-    UP1 = 1,
-    UP2 = 2,
-    RIGHT0 = 3,
-    RIGHT1 = 4,
-    RIGHT2 = 5,
-    DOWN0 = 6,
-    DOWN1 = 7,
-    DOWN2 = 8,
-    LEFT0 = 9,
-    LEFT1 = 10,
-    LEFT2 = 11,
+    ANIMATION_FRAME_UP0 = 0,
+    ANIMATION_FRAME_UP1 = 1,
+    ANIMATION_FRAME_UP2 = 2,
+    ANIMATION_FRAME_RIGHT0 = 3,
+    ANIMATION_FRAME_RIGHT1 = 4,
+    ANIMATION_FRAME_RIGHT2 = 5,
+    ANIMATION_FRAME_DOWN0 = 6,
+    ANIMATION_FRAME_DOWN1 = 7,
+    ANIMATION_FRAME_DOWN2 = 8,
+    ANIMATION_FRAME_LEFT0 = 9,
+    ANIMATION_FRAME_LEFT1 = 10,
+    ANIMATION_FRAME_LEFT2 = 11,
 } AnimationFrame;
 
 #define GRASS_X 0
@@ -128,6 +130,11 @@ typedef enum {
 #define SHRINE_X 6
 #define SHRINE_Y 16
 
+typedef enum {
+    ENEMY_TYPE_SKELETON,
+    ENEMY_TYPE_ZOMBIE,
+} EnemyType;
+
 typedef struct {
     BlockType type;
 } Block;
@@ -150,11 +157,21 @@ typedef struct {
     AnimationFrame f;
     size_t counter;
     size_t rate;
+    Asset *asset;
+    size_t bases[4];
+    int w;
+    int h;
+    int w_offset;
+    int h_offset;
+    int x_offset;
+    int y_offset;
 } Animation;
 
 typedef struct {
     Posf pos;
     Posf vel;
+    float health;
+    Posf facing;
     Animation animation;
 } Player;
 
@@ -162,6 +179,7 @@ typedef struct {
     Posf pos;
     Posf vel;
     float health;
+    Animation animation;
 } Entity;
 
 typedef struct {

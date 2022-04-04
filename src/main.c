@@ -4,13 +4,43 @@
 #include <math.h>
 #include <stdio.h>
 
-Enemy create_enemy(Posf spawn_location) {
+Enemy create_enemy(Asset *asset, Posf spawn_location, EnemyType e) {
+    int w = 0;
+    int h = 0;
+    int h_offset = 0;
+    int x_offset = 0;
+    if (e == ENEMY_TYPE_SKELETON) {
+        w = 32;
+        h = 48;
+        h_offset = 16;
+        x_offset = 3;
+    } else if (e == ENEMY_TYPE_ZOMBIE) {
+        w = 32;
+        h = 42;
+        h_offset = 23;
+        x_offset = 0;
+    }
     return (Enemy){
         .entity =
             (Entity){
                 .pos = spawn_location,
                 .vel = (Posf){.x = 0, .y = 0},
                 .health = 100.0f,
+                .animation =
+                    (Animation){
+                        .animating = false,
+                        .f = ANIMATION_FRAME_DOWN0,
+                        .counter = 0,
+                        .rate = 20,
+                        .asset = asset + 4,
+                        .bases = {3, 2, 0, 1},
+                        .w = w,
+                        .h = h,
+                        .w_offset = 0,
+                        .h_offset = h_offset,
+                        .x_offset = x_offset,
+                        .y_offset = 0,
+                    },
             },
         .spawn = spawn_location,
         .cooldown_next_state = 0,
@@ -69,14 +99,14 @@ Posf posf_direction(Posf from, Posf to) {
     return posf_set_magnitute(out, 1);
 }
 
-void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
-                 SDL_Rect *dst) {
-    SDL_RenderCopy(renderer, a.texture,
+void renderAsset(SDL_Renderer *renderer, Asset *a, int w, int h, int w_offset,
+                 int h_offset, int x, int y, SDL_Rect *dst) {
+    SDL_RenderCopy(renderer, a->texture,
                    &(SDL_Rect){
                        .w = w,
                        .h = h,
-                       .x = x * w,
-                       .y = y * h,
+                       .x = (x * w) + ((x + 1) * w_offset),
+                       .y = (y * h) + ((y + 1) * h_offset),
                    },
                    dst);
 }
@@ -84,44 +114,67 @@ void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
 #define PLAYER_SPRITE_W 31
 #define PLAYER_SPRITE_H 36
 
-void renderSprite(SDL_Renderer *renderer, AnimationFrame f, Asset a,
-                  SDL_Rect *r) {
-    switch (f) {
-    case UP0:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 0, r);
+void renderSprite(SDL_Renderer *renderer, Animation animation, SDL_Rect *r) {
+    switch (animation.f) {
+    case ANIMATION_FRAME_UP0:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 0, animation.bases[0], r);
         break;
-    case UP1:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 0, r);
+    case ANIMATION_FRAME_UP1:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 1, animation.bases[0], r);
         break;
-    case UP2:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 0, r);
+    case ANIMATION_FRAME_UP2:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 2, animation.bases[0], r);
         break;
-    case RIGHT0:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 1, r);
+    case ANIMATION_FRAME_RIGHT0:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 0, animation.bases[1], r);
         break;
-    case RIGHT1:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 1, r);
+    case ANIMATION_FRAME_RIGHT1:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 1, animation.bases[1], r);
         break;
-    case RIGHT2:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 1, r);
+    case ANIMATION_FRAME_RIGHT2:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 2, animation.bases[1], r);
         break;
-    case DOWN0:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 2, r);
+    case ANIMATION_FRAME_DOWN0:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 0, animation.bases[2], r);
         break;
-    case DOWN1:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 2, r);
+    case ANIMATION_FRAME_DOWN1:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 1, animation.bases[2], r);
         break;
-    case DOWN2:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 2, r);
+    case ANIMATION_FRAME_DOWN2:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 2, animation.bases[2], r);
         break;
-    case LEFT0:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 0, 3, r);
+    case ANIMATION_FRAME_LEFT0:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 0, animation.bases[3], r);
         break;
-    case LEFT1:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 1, 3, r);
+    case ANIMATION_FRAME_LEFT1:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 1, animation.bases[3], r);
         break;
-    case LEFT2:
-        renderAsset(renderer, a, PLAYER_SPRITE_W, PLAYER_SPRITE_H, 2, 3, r);
+    case ANIMATION_FRAME_LEFT2:
+        renderAsset(renderer, animation.asset, animation.w, animation.h,
+                    animation.w_offset, animation.h_offset,
+                    animation.x_offset + 2, animation.bases[3], r);
         break;
     default:
         break;
@@ -131,44 +184,48 @@ void renderSprite(SDL_Renderer *renderer, AnimationFrame f, Asset a,
 void renderTile(SDL_Renderer *renderer, BlockType type, Asset a, SDL_Rect *r) {
     switch (type) {
     case GRASS:
-        renderAsset(renderer, a, 16, 16, GRASS_X, GRASS_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, GRASS_X, GRASS_Y, r);
         break;
     case PATH_VERT:
-        renderAsset(renderer, a, 16, 16, PATH_VERT_X, PATH_VERT_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_VERT_X, PATH_VERT_Y, r);
         break;
     case PATH_HORIZ:
-        renderAsset(renderer, a, 16, 16, PATH_HORIZ_X, PATH_HORIZ_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_HORIZ_X, PATH_HORIZ_Y, r);
         break;
     case PATH_END_UP:
-        renderAsset(renderer, a, 16, 16, PATH_END_UP_X, PATH_END_UP_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_END_UP_X, PATH_END_UP_Y,
+                    r);
         break;
     case PATH_END_DOWN:
-        renderAsset(renderer, a, 16, 16, PATH_END_DOWN_X, PATH_END_DOWN_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_END_DOWN_X,
+                    PATH_END_DOWN_Y, r);
         break;
     case PATH_END_LEFT:
-        renderAsset(renderer, a, 16, 16, PATH_END_LEFT_X, PATH_END_LEFT_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_END_LEFT_X,
+                    PATH_END_LEFT_Y, r);
         break;
     case PATH_END_RIGHT:
-        renderAsset(renderer, a, 16, 16, PATH_END_RIGHT_X, PATH_END_RIGHT_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_END_RIGHT_X,
+                    PATH_END_RIGHT_Y, r);
         break;
     case PATH_CORNER_DOWN_RIGHT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_RIGHT_X,
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_CORNER_DOWN_RIGHT_X,
                     PATH_CORNER_DOWN_RIGHT_Y, r);
         break;
     case PATH_CORNER_DOWN_LEFT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_LEFT_X,
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_CORNER_DOWN_LEFT_X,
                     PATH_CORNER_DOWN_LEFT_Y, r);
         break;
     case PATH_CORNER_UP_RIGHT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_RIGHT_X,
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_CORNER_UP_RIGHT_X,
                     PATH_CORNER_UP_RIGHT_Y, r);
         break;
     case PATH_CORNER_UP_LEFT:
-        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_LEFT_X,
+        renderAsset(renderer, &a, 16, 16, 0, 0, PATH_CORNER_UP_LEFT_X,
                     PATH_CORNER_UP_LEFT_Y, r);
         break;
     case SHRINE:
-        renderAsset(renderer, a, 16, 16, SHRINE_X, SHRINE_Y, r);
+        renderAsset(renderer, &a, 16, 16, 0, 0, SHRINE_X, SHRINE_Y, r);
         break;
     default:
         break;
@@ -253,6 +310,47 @@ void processInput(Player *player, Camera *camera, SDL_Event *e,
     }
 }
 
+void animateEntity(Entity *entity) {
+    // update animation direction
+    if (entity->vel.x > 0.01) {
+        if (entity->animation.f < ANIMATION_FRAME_RIGHT0 ||
+            entity->animation.f > ANIMATION_FRAME_RIGHT2) {
+            entity->animation.f = ANIMATION_FRAME_RIGHT0;
+        }
+    } else if (entity->vel.x < -0.1) {
+        if (entity->animation.f < ANIMATION_FRAME_LEFT0 ||
+            entity->animation.f > ANIMATION_FRAME_LEFT2) {
+            entity->animation.f = ANIMATION_FRAME_LEFT0;
+        }
+    } else if (entity->vel.y > 0.1) {
+        if (entity->animation.f < ANIMATION_FRAME_DOWN0 ||
+            entity->animation.f > ANIMATION_FRAME_DOWN2) {
+            entity->animation.f = ANIMATION_FRAME_DOWN0;
+        }
+    } else if (entity->vel.y < -0.1) {
+        if (entity->animation.f < ANIMATION_FRAME_UP0 ||
+            entity->animation.f > ANIMATION_FRAME_UP2) {
+            entity->animation.f = ANIMATION_FRAME_UP0;
+        }
+    }
+
+    if (fabs(entity->vel.x) < 0.01 && fabs(entity->vel.y) < 0.01) {
+        // if entity is not moving, use neutral frame
+        entity->animation.f = ((entity->animation.f / 3) * 3) + 1;
+        entity->animation.counter = 0;
+    } else if (entity->animation.counter >= entity->animation.rate) {
+        entity->animation.counter = 0;
+
+        if (entity->animation.f % 3 == 2) {
+            entity->animation.f -= 2;
+        } else {
+            entity->animation.f += 1;
+        }
+    } else {
+        entity->animation.counter++;
+    }
+}
+
 void mainLoop(void *userdata) {
 
     GameState *game_state = (GameState *)userdata;
@@ -299,26 +397,30 @@ void mainLoop(void *userdata) {
         }
     }
 
-    // Animate player
+    // Animate entities
     {
         Player *player = &game_state->player;
 
         // update animation direction
         if (player->vel.x > 0.01) {
-            if (player->animation.f < RIGHT0 || player->animation.f > RIGHT2) {
-                player->animation.f = RIGHT0;
+            if (player->animation.f < ANIMATION_FRAME_RIGHT0 ||
+                player->animation.f > ANIMATION_FRAME_RIGHT2) {
+                player->animation.f = ANIMATION_FRAME_RIGHT0;
             }
         } else if (player->vel.x < -0.1) {
-            if (player->animation.f < LEFT0 || player->animation.f > LEFT2) {
-                player->animation.f = LEFT0;
+            if (player->animation.f < ANIMATION_FRAME_LEFT0 ||
+                player->animation.f > ANIMATION_FRAME_LEFT2) {
+                player->animation.f = ANIMATION_FRAME_LEFT0;
             }
         } else if (player->vel.y > 0.1) {
-            if (player->animation.f < DOWN0 || player->animation.f > DOWN2) {
-                player->animation.f = DOWN0;
+            if (player->animation.f < ANIMATION_FRAME_DOWN0 ||
+                player->animation.f > ANIMATION_FRAME_DOWN2) {
+                player->animation.f = ANIMATION_FRAME_DOWN0;
             }
         } else if (player->vel.y < -0.1) {
-            if (player->animation.f < UP0 || player->animation.f > UP2) {
-                player->animation.f = UP0;
+            if (player->animation.f < ANIMATION_FRAME_UP0 ||
+                player->animation.f > ANIMATION_FRAME_UP2) {
+                player->animation.f = ANIMATION_FRAME_UP0;
             }
         }
 
@@ -336,6 +438,11 @@ void mainLoop(void *userdata) {
             }
         } else {
             player->animation.counter++;
+        }
+
+        Enemies *enemies = &game_state->enemies;
+        for (size_t i = 0; i < enemies->num_enemies; i++) {
+            animateEntity(&enemies->enemies[i].entity);
         }
     }
 
@@ -490,17 +597,26 @@ void mainLoop(void *userdata) {
                     .y = (enemy.entity.pos.y - camera_start.y) * camera.scale_y,
                 };
 
+                int enemy_w = enemy.entity.animation.w;
+                int enemy_h = enemy.entity.animation.h;
+
                 SDL_Rect r = {
                     .x = screen_pos.x,
                     .y = screen_pos.y,
-                    .w = player_w,
-                    .h = player_h,
+                    .w = enemy_w * 2,
+                    .h = enemy_h * 2,
                 };
 
                 SDL_Renderer *renderer = game_state->render_data.renderer;
 
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                SDL_RenderFillRect(renderer, &r);
+                // void renderSprite(SDL_Renderer *renderer, Animation
+                // animation, int w, int h,
+                //                   int w_offset, int h_offset, SDL_Rect *r) {
+
+                renderSprite(renderer, enemy.entity.animation, &r);
+
+                // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                // SDL_RenderFillRect(renderer, &r);
             } else {
                 continue;
             }
@@ -528,10 +644,7 @@ void mainLoop(void *userdata) {
 
         SDL_Renderer *renderer = game_state->render_data.renderer;
 
-        // void renderSprite(SDL_Renderer *renderer, AnimationFrame f, Asset a,
-        //                   SDL_Rect *r) {
-        renderSprite(renderer, player->animation.f,
-                     game_state->asset_store.assets[3], &r);
+        renderSprite(renderer, player->animation, &r);
         //  SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         //  SDL_RenderFillRect(renderer, &r);
     }
@@ -581,6 +694,7 @@ AssetStore startAssetDownload(RenderData render_data) {
         "/res/rpg16/default_sand.png",
         "/res/TilesetGrass/overworld_tileset_grass.png",
         "/res/rpgsprites1/mage_f.png",
+        "/res/ZombieandSkeleton/zombie_n_skeleton2.png",
     };
     size_t num_assets = sizeof(asset_names) / sizeof(char *);
 
@@ -865,35 +979,6 @@ int main() {
     printf("Creating game state\n");
     GameState *game_state = malloc(sizeof(GameState));
 
-    game_state->player = (Player){.pos =
-                                      (Posf){
-                                          .x = 100.0,
-                                          .y = 100.0,
-                                      },
-                                  .vel =
-                                      (Posf){
-                                          .x = 0.0,
-                                          .y = 0.0,
-                                      },
-                                  .health = 80,
-                                  .animation = (Animation){
-                                      .animating = false,
-                                      .f = DOWN0,
-                                      .counter = 0,
-                                      .rate = 20,
-                                  }};
-    game_state->enemies = (Enemies){
-        .enemies = malloc(sizeof(Enemy) * 1),
-        .num_enemies = 1,
-    };
-    for (size_t i = 0; i < game_state->enemies.num_enemies; i++) {
-        Posf spawn = {
-            .x = 80.0f,
-            .y = 10.0f,
-        };
-        game_state->enemies.enemies[i] = create_enemy(spawn);
-    }
-
     game_state->camera = (Camera){
         .pos =
             (Posf){
@@ -964,6 +1049,50 @@ int main() {
 
     printf("Starting asset downloads\n");
     game_state->asset_store = startAssetDownload(game_state->render_data);
+
+    game_state->player =
+        (Player){.pos =
+                     (Posf){
+                         .x = 80.0,
+                         .y = 0.0,
+                     },
+                 .vel =
+                     (Posf){
+                         .x = 0.0,
+                         .y = 0.0,
+                     },
+                 .health = 80,
+                 .animation = (Animation){
+                     .animating = false,
+                     .f = ANIMATION_FRAME_DOWN0,
+                     .counter = 0,
+                     .rate = 20,
+                     .asset = game_state->asset_store.assets + 3,
+                     .bases = {0, 1, 2, 3},
+                     .w = 31,
+                     .h = 36,
+                     .w_offset = 0,
+                     .h_offset = 0,
+                     .x_offset = 0,
+                     .y_offset = 0,
+                 }};
+    game_state->enemies = (Enemies){
+        .enemies = malloc(sizeof(Enemy) * 2),
+        .num_enemies = 2,
+    };
+    for (size_t i = 0; i < game_state->enemies.num_enemies; i++) {
+        Posf spawn = {
+            .x = 80.0f,
+            .y = 10.0f,
+        };
+        if (i % 2 == 0) {
+            game_state->enemies.enemies[i] = create_enemy(
+                game_state->asset_store.assets, spawn, ENEMY_TYPE_SKELETON);
+        } else {
+            game_state->enemies.enemies[i] = create_enemy(
+                game_state->asset_store.assets, spawn, ENEMY_TYPE_ZOMBIE);
+        }
+    }
 
     printf("Starting game state downloads\n");
     game_state->multistate = startStateDownload(&game_state->map);
