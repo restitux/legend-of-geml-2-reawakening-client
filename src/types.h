@@ -164,6 +164,11 @@ typedef struct {
     bool inverse_strafe;
 } Enemy;
 
+typedef struct {
+    Enemy* enemies;
+    size_t num_enemies;
+} Enemies;
+
 void enemy_update(Enemy *e, Entity *target, Map map);
 
 typedef enum {
@@ -195,7 +200,7 @@ typedef struct {
     Camera camera;
     Player player;
     MultiplayerState *multistate;
-    Enemy enemy;
+    Enemies enemies;
 } GameState;
 
 typedef struct {

@@ -194,16 +194,18 @@ void mainLoop(void *userdata) {
 
     // Move Enemy
     {
-        Enemy *enemy = &game_state->enemy;
+        Enemies *enemies = &game_state->enemies;
         Player player = game_state->player;
         Map map = game_state->map;
 
-        Entity player_entity = {
-            .pos = player.pos,
-            .vel = player.vel,
-        };
+        for (size_t i = 0; i < enemies->num_enemies; i++) {
+            Entity player_entity = {
+                .pos = player.pos,
+                .vel = player.vel,
+            };
 
-        // enemy_update(enemy, &player_entity, map);
+            // enemy_update(enemy, &player_entity, map);
+        }
     }
 
     // Render Map
@@ -212,13 +214,13 @@ void mainLoop(void *userdata) {
         Map map = game_state->map;
 
         int block_w = BLOCK_WIDTH * camera.scale_x;
-        int block_h = BLOCK_WIDTH * camera.scale_y;
+        int block_h = BLOCK_HEIGHT * camera.scale_y;
 
-        int blocks_per_screen_w = (SCREEN_WIDTH / block_w) + 1;
-        int blocks_per_screen_h = (SCREEN_HEIGHT / block_h) + 1;
+        int blocks_per_screen_w = (SCREEN_WIDTH / block_w);
+        int blocks_per_screen_h = (SCREEN_HEIGHT / block_h);
 
-        double top_left_x = camera.pos.x - ((float)blocks_per_screen_w / 2) + 2;
-        double top_left_y = camera.pos.y - ((float)blocks_per_screen_h / 2) + 2;
+        double top_left_x = camera.pos.x - ((float)blocks_per_screen_w / 2);
+        double top_left_y = camera.pos.y - ((float)blocks_per_screen_h / 2);
 
         double integral_x;
         double fractional_x = modf(top_left_x, &integral_x);
@@ -243,9 +245,9 @@ void mainLoop(void *userdata) {
                 .w = block_w,
                 .h = block_h,
             };
-            for (int y = 0; y < blocks_per_screen_h; y++) {
+            for (int y = 0; y < blocks_per_screen_h + 2; y++) {
                 r.y = offset_y + (block_h * y);
-                for (int x = 0; x < blocks_per_screen_w; x++) {
+                for (int x = 0; x < blocks_per_screen_w + 2; x++) {
                     r.x = offset_x + (block_w * x);
                     size_t block_index =
                         ((base_block_y + y) * map.width) + (base_block_x + x);
@@ -260,24 +262,66 @@ void mainLoop(void *userdata) {
     // Draw enemy
     {
         Camera camera = game_state->camera;
-        Enemy enemy = game_state->enemy;
 
-        float player_w = PLAYER_WIDTH * camera.scale_x;
-        float player_h = PLAYER_WIDTH * camera.scale_y;
+        // check if enemy should be drawn on screen
 
-        Posf screen_pos = posf_world_to_camera(enemy.entity.pos, camera);
+        int block_w = BLOCK_WIDTH * camera.scale_x;
+        int block_h = BLOCK_HEIGHT * camera.scale_y;
 
-        SDL_Rect r = {
-            .x = screen_pos.x,
-            .y = screen_pos.y,
-            .w = player_w,
-            .h = player_h,
-        };
+        int blocks_per_screen_w = (SCREEN_WIDTH / block_w);
+        int blocks_per_screen_h = (SCREEN_HEIGHT / block_h);
 
-        SDL_Renderer *renderer = game_state->render_data.renderer;
+        Posf camera_start = {.x = 0.0f, .y = 0.0f};
+        Posf camera_end = {.x = 0.0f, .y = 0.0f};
 
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &r);
+        camera_start.x = camera.pos.x - ((float)blocks_per_screen_h / 2);
+        camera_start.y = camera.pos.y - ((float)blocks_per_screen_w / 2);
+        camera_end.x = camera.pos.x + ((float)blocks_per_screen_w / 2);
+        camera_end.y = camera.pos.y + ((float)blocks_per_screen_h / 2);
+
+        for (size_t i = 0; i < game_state->enemies.num_enemies; i++) {
+            Enemy enemy = game_state->enemies.enemies[i];
+
+            // if enemy is on screen
+            if (camera_start.x <= enemy.entity.pos.x &&
+                enemy.entity.pos.x <= camera_end.x &&
+                camera_start.y <= enemy.entity.pos.y &&
+                enemy.entity.pos.y <= camera_end.y) {
+                printf("Enemy at (%f, %f) in on screen\n", enemy.entity.pos.x,
+                       enemy.entity.pos.y);
+
+                float player_w = PLAYER_WIDTH * camera.scale_x;
+                float player_h = PLAYER_WIDTH * camera.scale_y;
+
+                Posf screen_pos = (Posf){
+                    .x = (enemy.entity.pos.x - camera_start.x) * camera.scale_x,
+                    .y = (enemy.entity.pos.y - camera_start.y) * camera.scale_y,
+                };
+
+                SDL_Rect r = {
+                    .x = screen_pos.x,
+                    .y = screen_pos.y,
+                    .w = player_w,
+                    .h = player_h,
+                };
+
+                // r = (SDL_Rect){
+                //     .x = 40,
+                //     .y = 40,
+                //     .w = player_w,
+                //     .h = player_h,
+                // };
+
+                SDL_Renderer *renderer = game_state->render_data.renderer;
+
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                SDL_RenderFillRect(renderer, &r);
+            } else {
+                printf("Enemy at (%f, %f) in off screen\n", enemy.entity.pos.x,
+                       enemy.entity.pos.y);
+                continue;
+            }
+        }
     }
 
     // Draw player
@@ -642,24 +686,30 @@ int main() {
                                       .x = 0.0,
                                       .y = 0.0,
                                   }};
-    game_state->enemy = (Enemy){
-        .entity = (Entity){.pos =
-                               (Posf){
-                                   .x = 150.0f,
-                                   .y = 100.0f,
-                               },
-                           .vel =
-                               (Posf){
-                                   .x = 0.0,
-                                   .y = 0.0,
-                               }},
-        .spawn =
-            (Posf){
-                .x = 150.0f,
-                .y = 100.0f,
-            },
-        .state = StateIdle,
+    game_state->enemies = (Enemies){
+        .enemies = malloc(sizeof(Enemy) * 10),
+        .num_enemies = 10,
     };
+    for (size_t i = 0; i < game_state->enemies.num_enemies; i++) {
+        game_state->enemies.enemies[i] = (Enemy){
+            .entity = (Entity){.pos =
+                                   (Posf){
+                                       .x = 150.0f,
+                                       .y = i * 10.0f,
+                                   },
+                               .vel =
+                                   (Posf){
+                                       .x = 0.0,
+                                       .y = 0.0,
+                                   }},
+            .spawn =
+                (Posf){
+                    .x = 150.0f,
+                    .y = i * 10.0f,
+                },
+            .state = StateIdle,
+        };
+    }
 
     game_state->camera = (Camera){
         .pos =
