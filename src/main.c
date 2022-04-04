@@ -42,7 +42,7 @@
 #define CAMERA_MAX_SCROLL 4.0
 #define CAMERA_SCROLL_INC CAMERA_MAX_SCROLL / 10.0
 
-#define PLAYER_VELOCTY 0.04
+#define PLAYER_VELOCTY 0.12
 
 typedef struct {
     int x;
@@ -74,10 +74,14 @@ typedef enum {
     GRASS,
     PATH_VERT,
     PATH_HORIZ,
-    PATH_END_TOP,
-    PATH_END_BOT,
+    PATH_END_UP,
+    PATH_END_DOWN,
     PATH_END_LEFT,
     PATH_END_RIGHT,
+    PATH_CORNER_DOWN_RIGHT,
+    PATH_CORNER_DOWN_LEFT,
+    PATH_CORNER_UP_RIGHT,
+    PATH_CORNER_UP_LEFT,
     SHRINE,
 } BlockType;
 
@@ -87,14 +91,22 @@ typedef enum {
 #define PATH_VERT_Y 2
 #define PATH_HORIZ_X 6
 #define PATH_HORIZ_Y 0
-#define PATH_END_TOP_X 4
-#define PATH_END_TOP_Y 1
-#define PATH_END_BOT_X 4
-#define PATH_END_BOT_Y 3
+#define PATH_END_UP_X 4
+#define PATH_END_UP_Y 1
+#define PATH_END_DOWN_X 4
+#define PATH_END_DOWN_Y 3
 #define PATH_END_LEFT_X 5
 #define PATH_END_LEFT_Y 0
 #define PATH_END_RIGHT_X 7
 #define PATH_END_RIGHT_Y 0
+#define PATH_CORNER_DOWN_RIGHT_X 5
+#define PATH_CORNER_DOWN_RIGHT_Y 1
+#define PATH_CORNER_DOWN_LEFT_X 7
+#define PATH_CORNER_DOWN_LEFT_Y 1
+#define PATH_CORNER_UP_RIGHT_X 5
+#define PATH_CORNER_UP_RIGHT_Y 3
+#define PATH_CORNER_UP_LEFT_X 7
+#define PATH_CORNER_UP_LEFT_Y 3
 #define SHRINE_X 6
 #define SHRINE_Y 16
 
@@ -180,17 +192,29 @@ void renderTile(SDL_Renderer *renderer, BlockType type, Asset a, SDL_Rect *r) {
     case PATH_HORIZ:
         renderAsset(renderer, a, 16, 16, PATH_HORIZ_X, PATH_HORIZ_Y, r);
         break;
-    case PATH_END_TOP:
-        renderAsset(renderer, a, 16, 16, PATH_END_TOP_X, PATH_END_TOP_Y, r);
+    case PATH_END_UP:
+        renderAsset(renderer, a, 16, 16, PATH_END_UP_X, PATH_END_UP_Y, r);
         break;
-    case PATH_END_BOT:
-        renderAsset(renderer, a, 16, 16, PATH_END_BOT_X, PATH_END_BOT_Y, r);
+    case PATH_END_DOWN:
+        renderAsset(renderer, a, 16, 16, PATH_END_DOWN_X, PATH_END_DOWN_Y, r);
         break;
     case PATH_END_LEFT:
         renderAsset(renderer, a, 16, 16, PATH_END_LEFT_X, PATH_END_LEFT_Y, r);
         break;
     case PATH_END_RIGHT:
         renderAsset(renderer, a, 16, 16, PATH_END_RIGHT_X, PATH_END_RIGHT_Y, r);
+        break;
+    case PATH_CORNER_DOWN_RIGHT:
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_RIGHT_X, PATH_CORNER_DOWN_RIGHT_Y, r);
+        break;
+    case PATH_CORNER_DOWN_LEFT:
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_DOWN_LEFT_X, PATH_CORNER_DOWN_LEFT_Y, r);
+        break;
+    case PATH_CORNER_UP_RIGHT:
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_RIGHT_X, PATH_CORNER_UP_RIGHT_Y, r);
+        break;
+    case PATH_CORNER_UP_LEFT:
+        renderAsset(renderer, a, 16, 16, PATH_CORNER_UP_LEFT_X, PATH_CORNER_UP_LEFT_Y, r);
         break;
     case SHRINE:
         renderAsset(renderer, a, 16, 16, SHRINE_X, SHRINE_Y, r);
@@ -619,6 +643,107 @@ MultiplayerState *startStateDownload() {
     return (MultiplayerState *)attr.userData;
 }
 
+void drawPaths(Posi *shrines, size_t num_shrines, Block *blocks) {
+    for (size_t i = 0; i < num_shrines; i++) {
+        Posi nearest_shrines[1] = {0};
+        size_t nearest_distances[1] = {SIZE_MAX};
+
+        // find the nearest shrine
+        for (size_t j = 0; j < num_shrines; j++) {
+            if (i == j) {
+                continue;
+            }
+
+            // calculate manhattan distance
+            size_t distance = abs(shrines[i].x - shrines[j].x) +
+                              abs(shrines[i].y - shrines[j].y);
+            for (size_t k = 0; k < 1; k++) {
+                if (distance <= nearest_distances[k]) {
+                    // for (size_t l = 1; l > k; l--) {
+                    //     nearest_distances[l] = nearest_distances[l - 1];
+                    //     nearest_shrines[l] = nearest_shrines[l - 1];
+                    // }
+                    nearest_distances[k] = distance;
+                    nearest_shrines[k] = shrines[j];
+                    break;
+                }
+            }
+        }
+
+        // draw paths to nearest shrines
+        // first pass, dumb drawing algorithm
+        for (size_t j = 0; j < 1; j++) {
+            Posi start = shrines[i];
+            Posi end = nearest_shrines[j];
+
+            // ignore this annyoing case for now
+            if (start.x == end.x || start.y == end.y) {
+                continue;
+            }
+
+            if (start.x > end.x) {
+                Posi temp = start;
+                start = end;
+                end = temp;
+            }
+
+            // 50/50 change of UP -> RIGHT or RIGHT -> UP
+            if ((start.x + end.x) % 2 == 0) {
+                // plot y path
+                if (start.y < end.y) {
+                    blocks[((start.y + 1) * MAP_WIDTH) + start.x].type =
+                        PATH_END_UP;
+                    for (int y = start.y + 2; y <= end.y - 1; y++) {
+                        blocks[y * MAP_WIDTH + start.x].type = PATH_VERT;
+                    }
+                    blocks[end.y * MAP_WIDTH + start.x].type = PATH_CORNER_UP_RIGHT;
+                } else if (start.y > end.y) {
+                    blocks[((start.y - 1) * MAP_WIDTH) + start.x].type =
+                        PATH_END_DOWN;
+                    for (int y = start.y - 2; y >= end.y + 1; y--) {
+                        blocks[y * MAP_WIDTH + start.x].type = PATH_VERT;
+                    }
+                    blocks[end.y * MAP_WIDTH + start.x].type = PATH_CORNER_DOWN_RIGHT;
+                }
+
+
+                // plot x path
+                for (int x = start.x + 1; x <= end.x - 2; x++) {
+                    blocks[end.y * MAP_WIDTH + x].type = PATH_HORIZ;
+                }
+                blocks[end.y * MAP_WIDTH + (end.x - 1)].type = PATH_END_RIGHT;
+            } else {
+                // plot x path
+                blocks[start.y * MAP_WIDTH + (start.x + 1)].type = PATH_END_LEFT;
+                for (int x = start.x + 2; x <= end.x - 1; x++) {
+                    blocks[start.y * MAP_WIDTH + x].type = PATH_HORIZ;
+                }
+
+                // plot y path
+                if (start.y < end.y) {
+                    blocks[start.y * MAP_WIDTH + end.x].type = PATH_CORNER_DOWN_LEFT;
+                    for (int y = start.y + 1; y <= end.y - 2; y++) {
+                        blocks[y * MAP_WIDTH + end.x].type = PATH_VERT;
+                    }
+                    blocks[((end.y - 1) * MAP_WIDTH) + end.x].type =
+                        PATH_END_DOWN;
+                } else if (start.y > end.y) {
+                    blocks[start.y * MAP_WIDTH + end.x].type = PATH_CORNER_UP_LEFT;
+                    for (int y = start.y - 1; y >= end.y + 2; y--) {
+                        blocks[y * MAP_WIDTH + end.x].type = PATH_VERT;
+                    }
+                    blocks[((end.y + 1) * MAP_WIDTH) + end.x].type =
+                        PATH_END_UP;
+
+                }
+            }
+
+        }
+
+    }
+}
+
+
 int main() {
     printf("Creating game state\n");
     GameState *game_state = malloc(sizeof(GameState));
@@ -685,95 +810,7 @@ int main() {
         num_shrines++;
     }
 
-    for (size_t i = 0; i < num_shrines; i++) {
-        Posi nearest_shrines[1] = {0};
-        size_t nearest_distances[1] = {SIZE_MAX};
-
-        // find the 2 nearest shrines
-        for (size_t j = 0; j < num_shrines; j++) {
-            if (i == j) {
-                continue;
-            }
-
-            // calculate manhattan distance
-            size_t distance = abs(shrines[i].x - shrines[j].x) +
-                              abs(shrines[i].y - shrines[j].y);
-            for (size_t k = 0; k < 1; k++) {
-                if (distance <= nearest_distances[k]) {
-                    // for (size_t l = 1; l > k; l--) {
-                    //     nearest_distances[l] = nearest_distances[l - 1];
-                    //     nearest_shrines[l] = nearest_shrines[l - 1];
-                    // }
-                    nearest_distances[k] = distance;
-                    nearest_shrines[k] = shrines[j];
-                    break;
-                }
-            }
-        }
-
-        // draw paths to nearest shrines
-        // first pass, dumb drawing algorithm
-        for (size_t j = 0; j < 1; j++) {
-            Posi start = shrines[i];
-            Posi end = nearest_shrines[j];
-
-            // ignore this annyoing case for now
-            if (start.x == end.x || start.y == end.y) {
-                continue;
-            }
-
-            if (start.x > end.x) {
-                blocks[start.y * MAP_WIDTH + (start.x - 1)] = (Block){
-                    .type = PATH_END_RIGHT,
-                };
-                for (int x = start.x - 2; x >= end.x + 1; x--) {
-                    blocks[start.y * MAP_WIDTH + x] = (Block){
-                        .type = PATH_HORIZ,
-                    };
-                }
-                if (start.y > end.y) {
-                    blocks[start.y * MAP_WIDTH + (end.x)] = (Block){
-                        .type = PATH_END_RIGHT,
-                    };
-
-                } else if (end.y < start.y) {
-                    blocks[start.y * MAP_WIDTH + (start.x - 1)] = (Block){
-                        .type = PATH_END_RIGHT,
-                    };
-                }
-            } else if (start.x < end.x) {
-                blocks[start.y * MAP_WIDTH + (start.x + 1)] = (Block){
-                    .type = PATH_END_LEFT,
-                };
-                for (int x = start.x + 2; x < end.x - 1; x++) {
-                    blocks[start.y * MAP_WIDTH + x] = (Block){
-                        .type = PATH_HORIZ,
-                    };
-                }
-            }
-
-            if (start.y > end.y) {
-                for (int y = start.y - 1; y > end.y + 1; y--) {
-                    blocks[y * MAP_WIDTH + end.x] = (Block){
-                        .type = PATH_VERT,
-                    };
-                }
-                blocks[(end.y + 1) * MAP_WIDTH + end.x] = (Block){
-                    .type = PATH_END_TOP,
-                };
-
-            } else if (start.y < end.y) {
-                for (int y = start.y + 1; y < end.y - 1; y++) {
-                    blocks[y * MAP_WIDTH + end.x] = (Block){
-                        .type = PATH_VERT,
-                    };
-                }
-                blocks[(end.y - 1) * MAP_WIDTH + end.x] = (Block){
-                    .type = PATH_END_BOT,
-                };
-            }
-        }
-    }
+    drawPaths(shrines, num_shrines, blocks);
 
     game_state->map = (Map){
         .width = MAP_WIDTH,
