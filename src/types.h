@@ -88,6 +88,21 @@ typedef enum {
     SHRINE,
 } BlockType;
 
+typedef enum {
+    UP0 = 0,
+    UP1 = 1,
+    UP2 = 2,
+    RIGHT0 = 3,
+    RIGHT1 = 4,
+    RIGHT2 = 5,
+    DOWN0 = 6,
+    DOWN1 = 7,
+    DOWN2 = 8,
+    LEFT0 = 9,
+    LEFT1 = 10,
+    LEFT2 = 11,
+} AnimationFrame;
+
 #define GRASS_X 0
 #define GRASS_Y 0
 #define PATH_VERT_X 4
@@ -131,8 +146,16 @@ typedef struct {
 } Camera;
 
 typedef struct {
+    bool animating;
+    AnimationFrame f;
+    size_t counter;
+    size_t rate;
+} Animation;
+
+typedef struct {
     Posf pos;
     Posf vel;
+    Animation animation;
 } Player;
 
 typedef struct {
@@ -165,7 +188,7 @@ typedef struct {
 } Enemy;
 
 typedef struct {
-    Enemy* enemies;
+    Enemy *enemies;
     size_t num_enemies;
 } Enemies;
 
