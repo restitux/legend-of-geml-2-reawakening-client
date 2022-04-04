@@ -628,7 +628,7 @@ void mainLoop(void *userdata) {
         Camera camera = game_state->camera;
         Player *player = &game_state->player;
 
-        printf("player pos: %f %f\n", player->pos.x, player->pos.y);
+        //printf("player pos: %f %f\n", player->pos.x, player->pos.y);
 
         float player_w = PLAYER_WIDTH * camera.scale_x;
         float player_h = PLAYER_WIDTH * camera.scale_y;
@@ -858,7 +858,7 @@ MultiplayerState *startStateDownload(Map *map) {
     };
     data->map = map;
 
-    char *state_file = "/res/shrine_list.json";
+    char *state_file = "http://log2r.ohea.xyz:8090/get_shrines";
 
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
@@ -1123,7 +1123,7 @@ int main() {
 #define ENEMY_KNOCKBACK_AMOUNT 0
 
 void entity_move(Entity *e, Map map) {
-    printf("entity vel vector (%f, %f)", e->vel.x, e->vel.y);
+    //printf("entity vel vector (%f, %f)", e->vel.x, e->vel.y);
     if (e->vel.x < 0 && e->pos.x > 0) {
         e->pos.x += e->vel.x;
     } else if (e->vel.x > 0 && e->pos.x < map.width) {
@@ -1185,7 +1185,7 @@ void enemy_chase(Enemy *e, Entity *target) {
     }
     Posf player_vec = posf_subtract(target->pos, e->entity.pos);
     float player_dist = posf_magnitute(player_vec);
-    printf("distance to player %f\n", player_dist);
+    //printf("distance to player %f\n", player_dist);
     if (player_dist < ENEMY_ATTACK_DIST) {
         e->state = StateCooldown;
         e->cooldown_next_state = StateAttack;
@@ -1193,7 +1193,7 @@ void enemy_chase(Enemy *e, Entity *target) {
         return;
     }
     Posf chase_vec = posf_set_magnitute(player_vec, ENEMY_VELOCITY);
-    printf("chase vec magnitude %f\n", posf_magnitute(chase_vec));
+    //printf("chase vec magnitude %f\n", posf_magnitute(chase_vec));
     e->entity.vel = chase_vec;
 }
 
@@ -1240,7 +1240,7 @@ void enemy_strafe(Enemy *e, Entity *target) {
 }
 
 void enemy_update(Enemy *e, Entity *target, Map map) {
-    printf("state is %d\n", e->state);
+    //printf("state is %d\n", e->state);
     switch (e->state) {
     case StateReturnToSpawn:
         enemy_return_to_spawn(e, target);
