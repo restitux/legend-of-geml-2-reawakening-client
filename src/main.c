@@ -304,8 +304,6 @@ void mainLoop(void *userdata) {
                 enemy.entity.pos.x <= camera_end.x &&
                 camera_start.y <= enemy.entity.pos.y &&
                 enemy.entity.pos.y <= camera_end.y) {
-                printf("Enemy at (%f, %f) in on screen\n", enemy.entity.pos.x,
-                       enemy.entity.pos.y);
 
                 float player_w = PLAYER_WIDTH * camera.scale_x;
                 float player_h = PLAYER_WIDTH * camera.scale_y;
@@ -322,20 +320,11 @@ void mainLoop(void *userdata) {
                     .h = player_h,
                 };
 
-                // r = (SDL_Rect){
-                //     .x = 40,
-                //     .y = 40,
-                //     .w = player_w,
-                //     .h = player_h,
-                // };
-
                 SDL_Renderer *renderer = game_state->render_data.renderer;
 
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
                 SDL_RenderFillRect(renderer, &r);
             } else {
-                printf("Enemy at (%f, %f) in off screen\n", enemy.entity.pos.x,
-                       enemy.entity.pos.y);
                 continue;
             }
         }
@@ -887,7 +876,7 @@ void enemy_return_to_spawn(Enemy *e, Entity *target) {
         e->state = StateIdle;
         return;
     }
-    Posf spawn_direction = posf_direction(e->entity.pos, e->spawn);
+    Posf spawn_direction = posf_direction(e->spawn, e->entity.pos);
     e->entity.vel = posf_set_magnitute(spawn_direction, ENEMY_VELOCITY);
 }
 
