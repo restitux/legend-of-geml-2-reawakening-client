@@ -1,6 +1,21 @@
 #include "types.h"
 #include <stdio.h>
 
+Enemy create_enemy(Posf spawn_location) {
+    return (Enemy){
+        .entity =
+            (Entity){
+                .pos = spawn_location,
+                .vel = (Posf){.x = 0, .y = 0},
+            },
+        .spawn = spawn_location,
+        .cooldown_next_state = 0,
+        .cooldown_ticks = 0,
+        .inverse_strafe = false,
+        .state = StateIdle,
+    };
+}
+
 void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
                  SDL_Rect *dst) {
     SDL_RenderCopy(renderer, a.texture,
@@ -204,7 +219,9 @@ void mainLoop(void *userdata) {
                 .vel = player.vel,
             };
 
-            // enemy_update(enemy, &player_entity, map);
+            Enemy *e = &enemies->enemies[i];
+
+            enemy_update(e, &player_entity, map);
         }
     }
 
@@ -687,28 +704,15 @@ int main() {
                                       .y = 0.0,
                                   }};
     game_state->enemies = (Enemies){
-        .enemies = malloc(sizeof(Enemy) * 10),
-        .num_enemies = 10,
+        .enemies = malloc(sizeof(Enemy) * 1),
+        .num_enemies = 1,
     };
     for (size_t i = 0; i < game_state->enemies.num_enemies; i++) {
-        game_state->enemies.enemies[i] = (Enemy){
-            .entity = (Entity){.pos =
-                                   (Posf){
-                                       .x = 150.0f,
-                                       .y = i * 10.0f,
-                                   },
-                               .vel =
-                                   (Posf){
-                                       .x = 0.0,
-                                       .y = 0.0,
-                                   }},
-            .spawn =
-                (Posf){
-                    .x = 150.0f,
-                    .y = i * 10.0f,
-                },
-            .state = StateIdle,
+        Posf spawn = {
+            .x = 80.0f,
+            .y = 10.0f,
         };
+        game_state->enemies.enemies[i] = create_enemy(spawn);
     }
 
     game_state->camera = (Camera){
@@ -839,8 +843,8 @@ Posf posf_set_magnitute(Posf pos, float mag) {
     float current_mag = posf_magnitute(pos);
     float scale_factor = current_mag / mag;
     return (Posf){
-        .x = pos.x * scale_factor,
-        .y = pos.y * scale_factor,
+        .x = pos.x / scale_factor,
+        .y = pos.y / scale_factor,
     };
 }
 
@@ -850,6 +854,7 @@ Posf posf_direction(Posf from, Posf to) {
 }
 
 void entity_move(Entity *e, Map map) {
+    printf("entity vel vector (%f, %f)", e->vel.x, e->vel.y);
     if (e->vel.x < 0 && e->pos.x > 0) {
         e->pos.x += e->vel.x;
     } else if (e->vel.x > 0 && e->pos.x < map.width) {
@@ -877,7 +882,7 @@ void enemy_idle(Enemy *e, Entity *target) {
 }
 
 void enemy_return_to_spawn(Enemy *e, Entity *target) {
-    float spawn_dist = posf_distance(e->entity.pos, e->spawn);
+    float spawn_dist = posf_distance(e->spawn, e->entity.pos);
     if (spawn_dist < ENEMY_RETREAT_DIST) {
         e->state = StateIdle;
         return;
@@ -887,6 +892,7 @@ void enemy_return_to_spawn(Enemy *e, Entity *target) {
 }
 
 void enemy_attack(Enemy *e, Entity *target) {
+    e->entity.vel = (Posf){0, 0};
     // TODO: do attack
     e->cooldown_ticks = ENEMY_ATTACK_COOLDOWN_TICKS;
     e->cooldown_next_state = StateRetreat;
@@ -894,18 +900,21 @@ void enemy_attack(Enemy *e, Entity *target) {
 }
 
 void enemy_chase(Enemy *e, Entity *target) {
+
     float distance_to_spawn = posf_distance(e->entity.pos, e->spawn);
     if (distance_to_spawn > ENEMY_CHASE_DIST) {
         e->state = StateReturnToSpawn;
         return;
     }
-    Posf player_vec = posf_subtract(e->entity.pos, target->pos);
+    Posf player_vec = posf_subtract(target->pos, e->entity.pos);
     float player_dist = posf_magnitute(player_vec);
+    printf("distance to player %f\n", player_dist);
     if (player_dist < ENEMY_ATTACK_DIST) {
         e->state = StateAttack;
         return;
     }
     Posf chase_vec = posf_set_magnitute(player_vec, ENEMY_VELOCITY);
+    printf("chase vec magnitude %f\n", posf_magnitute(chase_vec));
     e->entity.vel = chase_vec;
 }
 
@@ -917,7 +926,7 @@ void enemy_cooldown(Enemy *e, Entity *target) {
 }
 
 void enemy_retreat(Enemy *e, Entity *target) {
-    Posf player_vec = posf_subtract(e->entity.pos, target->pos);
+    Posf player_vec = posf_subtract(target->pos, e->entity.pos);
     float player_dist = posf_magnitute(player_vec);
     if (player_dist > ENEMY_RETREAT_DIST) {
         bool should_strafe = random_bool(ENEMY_STRAFE_CHANCE);
@@ -940,7 +949,7 @@ void enemy_strafe(Enemy *e, Entity *target) {
         e->state = StateRetreat;
         return;
     }
-    Posf player_vec = posf_direction(e->entity.pos, target->pos);
+    Posf player_vec = posf_subtract(target->pos, e->entity.pos);
     Posf strafe_vec = {
         .x = player_vec.y,
         .y = -player_vec.x,
@@ -952,6 +961,7 @@ void enemy_strafe(Enemy *e, Entity *target) {
 }
 
 void enemy_update(Enemy *e, Entity *target, Map map) {
+    printf("state is %d\n", e->state);
     switch (e->state) {
     case StateReturnToSpawn:
         enemy_return_to_spawn(e, target);
