@@ -7,6 +7,7 @@ Enemy create_enemy(Posf spawn_location) {
             (Entity){
                 .pos = spawn_location,
                 .vel = (Posf){.x = 0, .y = 0},
+                .health = 100.0f,
             },
         .spawn = spawn_location,
         .cooldown_next_state = 0,
@@ -799,6 +800,9 @@ int main() {
 #define ENEMY_CHASE_DIST 25
 #define ENEMY_ATTACK_COOLDOWN_TICKS 20
 #define ENEMY_STRAFE_CHANCE 0.5f
+#define ATTACK_WINDUP_TICKS 8
+#define ENEMY_ATTACK_DAMAGE 20
+#define ENEMY_KNOCKBACK_AMOUNT 1
 
 bool random_bool(float true_chance) {
     int random = rand();
@@ -819,6 +823,13 @@ Posf posf_subtract(Posf a, Posf b) {
     return (Posf){
         .x = a.x - b.x,
         .y = a.y - b.y,
+    };
+}
+
+Posf posf_add(Posf a, Posf b) {
+    return (Posf){
+        .x = a.x + b.x,
+        .y = a.y + b.y,
     };
 }
 
@@ -883,6 +894,14 @@ void enemy_return_to_spawn(Enemy *e, Entity *target) {
 void enemy_attack(Enemy *e, Entity *target) {
     e->entity.vel = (Posf){0, 0};
     // TODO: do attack
+    if (posf_distance(target->pos, e->entity.pos)) {
+        Posf attack_dir = posf_direction(target->pos, e->entity.pos);
+        Posf attack_vec =
+            posf_set_magnitute(attack_dir, ENEMY_KNOCKBACK_AMOUNT);
+        target->pos = posf_add(target->pos, attack_vec);
+        target->health -= ENEMY_ATTACK_DAMAGE;
+    }
+
     e->cooldown_ticks = ENEMY_ATTACK_COOLDOWN_TICKS;
     e->cooldown_next_state = StateRetreat;
     e->state = StateCooldown;
@@ -899,7 +918,9 @@ void enemy_chase(Enemy *e, Entity *target) {
     float player_dist = posf_magnitute(player_vec);
     printf("distance to player %f\n", player_dist);
     if (player_dist < ENEMY_ATTACK_DIST) {
-        e->state = StateAttack;
+        e->state = StateCooldown;
+        e->cooldown_next_state = StateAttack;
+        e->cooldown_ticks = ATTACK_WINDUP_TICKS;
         return;
     }
     Posf chase_vec = posf_set_magnitute(player_vec, ENEMY_VELOCITY);
