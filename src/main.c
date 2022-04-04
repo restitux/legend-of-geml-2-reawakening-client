@@ -249,9 +249,11 @@ void handle_player_attack(Player *player, Enemies *enemies) {
                 PLAYER_ATTACK_RANGE) {
                 e->entity.health -= 20;
                 Posf attack_dir = posf_direction(e->entity.pos, player->pos);
-                Posf attack_vec =
-                    posf_set_magnitute(attack_dir, PLAYER_KNOCKBACK_AMOUNT);
-                e->entity.pos = posf_add(e->entity.pos, attack_vec);
+                Posf attack_vec = posf_set_magnitute(attack_dir, 0.5);
+                e->entity.vel = attack_vec;
+                e->cooldown_next_state = StateChase;
+                e->cooldown_ticks = 3;
+                e->state = StateCooldown;
             }
         }
     }
@@ -1167,6 +1169,7 @@ void enemy_attack(Enemy *e, Entity *target) {
         Posf attack_dir = posf_direction(target->pos, e->entity.pos);
         Posf attack_vec =
             posf_set_magnitute(attack_dir, ENEMY_KNOCKBACK_AMOUNT);
+
         target->pos = posf_add(target->pos, attack_vec);
         target->health -= ENEMY_ATTACK_DAMAGE;
     }
