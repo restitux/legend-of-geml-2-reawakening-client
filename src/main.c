@@ -1,178 +1,5 @@
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
+#include "types.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "SDL2/SDL_events.h"
-#include "SDL2/SDL_keycode.h"
-#include "emscripten.h"
-#include "emscripten/fetch.h"
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_rwops.h>
-#include <SDL2/SDL_surface.h>
-
-#include "json.h"
-
-#define SCREEN_WIDTH 1000
-#define SCREEN_HEIGHT 1000
-
-#define MAP_WIDTH 500
-#define MAP_HEIGHT 500
-
-#define BLOCK_WIDTH 1
-#define BLOCK_HEIGHT 1
-
-#define PLAYER_WIDTH 1
-#define PLAYER_HEIGHT 1
-
-#define DEFAULT_BLOCKS_PER_SCREEN_W 20.0
-#define DEFAULT_BLOCKS_PER_SCREEN_H 20.0
-#define CAMERA_SCALE_DEFAULT_W 50
-#define CAMERA_SCALE_DEFAULT_H 50
-//#define DEFAULT_BLOCK_W SCREEN_WIDTH / DEFAULT_BLOCKS_PER_SCREEN_W
-//#define DEFAULT_BLOCK_H SCREEN_WIDTH / DEFAULT_BLOCKS_PER_SCREEN_H
-//#define CAMERA_SCALE_DEFAULT_W
-//#define CAMERA_SCALE_DEFAULT_H 1.0 / DEFAULT_BLOCK_H
-
-#define CAMERA_MAX_SCROLL 4.0
-#define CAMERA_SCROLL_INC CAMERA_MAX_SCROLL / 10.0
-
-#define PLAYER_VELOCTY 0.12
-
-typedef struct {
-    int x;
-    int y;
-} Posi;
-
-typedef struct {
-    float x;
-    float y;
-} Posf;
-
-typedef struct {
-    char *path;
-    bool completed;
-    SDL_Texture *texture;
-} Asset;
-
-typedef struct {
-    Asset *assets;
-    size_t size;
-} AssetStore;
-
-typedef struct {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-} RenderData;
-
-typedef enum {
-    GRASS,
-    PATH_VERT,
-    PATH_HORIZ,
-    PATH_END_UP,
-    PATH_END_DOWN,
-    PATH_END_LEFT,
-    PATH_END_RIGHT,
-    PATH_CORNER_DOWN_RIGHT,
-    PATH_CORNER_DOWN_LEFT,
-    PATH_CORNER_UP_RIGHT,
-    PATH_CORNER_UP_LEFT,
-    SHRINE,
-} BlockType;
-
-#define GRASS_X 0
-#define GRASS_Y 0
-#define PATH_VERT_X 4
-#define PATH_VERT_Y 2
-#define PATH_HORIZ_X 6
-#define PATH_HORIZ_Y 0
-#define PATH_END_UP_X 4
-#define PATH_END_UP_Y 1
-#define PATH_END_DOWN_X 4
-#define PATH_END_DOWN_Y 3
-#define PATH_END_LEFT_X 5
-#define PATH_END_LEFT_Y 0
-#define PATH_END_RIGHT_X 7
-#define PATH_END_RIGHT_Y 0
-#define PATH_CORNER_DOWN_RIGHT_X 5
-#define PATH_CORNER_DOWN_RIGHT_Y 1
-#define PATH_CORNER_DOWN_LEFT_X 7
-#define PATH_CORNER_DOWN_LEFT_Y 1
-#define PATH_CORNER_UP_RIGHT_X 5
-#define PATH_CORNER_UP_RIGHT_Y 3
-#define PATH_CORNER_UP_LEFT_X 7
-#define PATH_CORNER_UP_LEFT_Y 3
-#define SHRINE_X 6
-#define SHRINE_Y 16
-
-typedef struct {
-    BlockType type;
-} Block;
-
-typedef struct {
-    size_t height;
-    size_t width;
-    Block *blocks;
-} Map;
-
-typedef struct {
-    Posf pos;
-    float scale_x;
-    float scale_y;
-    Posf scroll;
-} Camera;
-
-typedef struct {
-    Posf pos;
-    Posf vel;
-} Player;
-
-typedef enum {
-    UNSYNCED,
-    SYNCED,
-    SYNC_FAILED,
-} MULTIPLAYER_SYNC_STATE;
-
-typedef struct {
-    int id;
-    Posi pos;
-    int power;
-    int state;
-    char *created_by;
-    char **contributors;
-    size_t contributors_len;
-} Shrine;
-
-typedef struct {
-    MULTIPLAYER_SYNC_STATE sync_state;
-    Shrine *shrines;
-    size_t shrines_len;
-} MultiplayerState;
-
-typedef struct {
-    AssetStore asset_store;
-    RenderData render_data;
-    Map map;
-    Camera camera;
-    Player player;
-    MultiplayerState *multistate;
-} GameState;
-
-typedef struct {
-    size_t asset_index;
-    AssetStore asset_store;
-    RenderData render_data;
-} AssetDownloadCallbackData;
-
-typedef struct {
-    Map *map;
-    MultiplayerState *multistate;
-} MultiplayerStateSyncCallbackData;
 
 void renderAsset(SDL_Renderer *renderer, Asset a, int w, int h, int x, int y,
                  SDL_Rect *dst) {
@@ -365,6 +192,20 @@ void mainLoop(void *userdata) {
         camera->pos.y = player.pos.y; // + camera->scroll.y;
     }
 
+    // Move Enemy
+    {
+        Enemy *enemy = &game_state->enemy;
+        Player player = game_state->player;
+        Map map = game_state->map;
+
+        Entity player_entity = {
+            .pos = player.pos,
+            .vel = player.vel,
+        };
+
+        // enemy_update(enemy, &player_entity, map);
+    }
+
     // Render Map
     {
         Camera camera = game_state->camera;
@@ -416,10 +257,35 @@ void mainLoop(void *userdata) {
         }
     }
 
+    // Draw enemy
+    {
+        Camera camera = game_state->camera;
+        Enemy enemy = game_state->enemy;
+
+        float player_w = PLAYER_WIDTH * camera.scale_x;
+        float player_h = PLAYER_WIDTH * camera.scale_y;
+
+        Posf screen_pos = posf_world_to_camera(enemy.entity.pos, camera);
+
+        SDL_Rect r = {
+            .x = screen_pos.x,
+            .y = screen_pos.y,
+            .w = player_w,
+            .h = player_h,
+        };
+
+        SDL_Renderer *renderer = game_state->render_data.renderer;
+
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &r);
+    }
+
     // Draw player
     {
         Camera camera = game_state->camera;
         Player *player = &game_state->player;
+
+        printf("player pos: %f %f\n", player->pos.x, player->pos.y);
 
         float player_w = PLAYER_WIDTH * camera.scale_x;
         float player_h = PLAYER_WIDTH * camera.scale_y;
@@ -576,8 +442,9 @@ void stateDownloadSucceded(emscripten_fetch_t result) {
 
     printf("url: (%s)\n", result.url);
 
-    MultiplayerStateSyncCallbackData *data = (MultiplayerStateSyncCallbackData*)result.userData;
-    MultiplayerState* state = data->multistate;
+    MultiplayerStateSyncCallbackData *data =
+        (MultiplayerStateSyncCallbackData *)result.userData;
+    MultiplayerState *state = data->multistate;
 
     struct json_value_s *root = json_parse(result.data, result.numBytes);
     struct json_object_s *root_object = (struct json_object_s *)root->payload;
@@ -775,6 +642,24 @@ int main() {
                                       .x = 0.0,
                                       .y = 0.0,
                                   }};
+    game_state->enemy = (Enemy){
+        .entity = (Entity){.pos =
+                               (Posf){
+                                   .x = 150.0f,
+                                   .y = 100.0f,
+                               },
+                           .vel =
+                               (Posf){
+                                   .x = 0.0,
+                                   .y = 0.0,
+                               }},
+        .spawn =
+            (Posf){
+                .x = 150.0f,
+                .y = 100.0f,
+            },
+        .state = StateIdle,
+    };
 
     game_state->camera = (Camera){
         .pos =
@@ -862,4 +747,183 @@ int main() {
     SDL_DestroyRenderer(game_state->render_data.renderer);
     SDL_DestroyWindow(game_state->render_data.window);
     SDL_Quit();
+}
+
+#define ENEMY_VELOCITY 0.13 // slightly faster than the player
+#define ENEMY_ATTACK_DIST 0.5
+#define ENEMY_RETREAT_DIST 5
+#define ENEMY_AGRO_DIST 15
+#define ENEMY_CHASE_DIST 25
+#define ENEMY_ATTACK_COOLDOWN_TICKS 20
+#define ENEMY_STRAFE_CHANCE 0.5f
+
+bool random_bool(float true_chance) {
+    int random = rand();
+    float random_float = ((float)random) / ((float)RAND_MAX);
+    return random_float < true_chance;
+}
+
+float posf_magnitute(Posf pos) { return sqrtf(pos.x * pos.x + pos.y * pos.y); }
+
+Posf posf_reverse(Posf pos) {
+    return (Posf){
+        .x = -pos.x,
+        .y = -pos.y,
+    };
+}
+
+Posf posf_subtract(Posf a, Posf b) {
+    return (Posf){
+        .x = a.x - b.x,
+        .y = a.y - b.y,
+    };
+}
+
+float posf_distance(Posf from, Posf to) {
+    Posf dist_vec = posf_subtract(from, to);
+
+    return posf_magnitute(dist_vec);
+}
+
+Posf posf_set_magnitute(Posf pos, float mag) {
+    float current_mag = posf_magnitute(pos);
+    float scale_factor = current_mag / mag;
+    return (Posf){
+        .x = pos.x * scale_factor,
+        .y = pos.y * scale_factor,
+    };
+}
+
+Posf posf_direction(Posf from, Posf to) {
+    Posf out = posf_subtract(from, to);
+    return posf_set_magnitute(out, 1);
+}
+
+void entity_move(Entity *e, Map map) {
+    if (e->vel.x < 0 && e->pos.x > 0) {
+        e->pos.x += e->vel.x;
+    } else if (e->vel.x > 0 && e->pos.x < map.width) {
+        e->pos.x += e->vel.x;
+    } else {
+        // printf("BLOCKED e WITH POS: (%f, %f) and VEL: (%f, %f)\n",
+        // e->pos.x, e->pos.y, e->vel.x, e->vel.y);
+    }
+    if (e->vel.y < 0 && e->pos.y > 0) {
+        e->pos.y += e->vel.y;
+    } else if (e->vel.y > 0 && e->pos.y < map.height) {
+        e->pos.y += e->vel.y;
+    }
+}
+
+void enemy_idle(Enemy *e, Entity *target) {
+
+    Posf player_vec = posf_subtract(e->entity.pos, target->pos);
+    float player_dist = posf_magnitute(player_vec);
+
+    if (player_dist < ENEMY_AGRO_DIST) {
+        e->state = StateChase;
+        return;
+    }
+}
+
+void enemy_return_to_spawn(Enemy *e, Entity *target) {
+    float spawn_dist = posf_distance(e->entity.pos, e->spawn);
+    if (spawn_dist < ENEMY_RETREAT_DIST) {
+        e->state = StateIdle;
+        return;
+    }
+    Posf spawn_direction = posf_direction(e->entity.pos, e->spawn);
+    e->entity.vel = posf_set_magnitute(spawn_direction, ENEMY_VELOCITY);
+}
+
+void enemy_attack(Enemy *e, Entity *target) {
+    // TODO: do attack
+    e->cooldown_ticks = ENEMY_ATTACK_COOLDOWN_TICKS;
+    e->cooldown_next_state = StateRetreat;
+    e->state = StateCooldown;
+}
+
+void enemy_chase(Enemy *e, Entity *target) {
+    float distance_to_spawn = posf_distance(e->entity.pos, e->spawn);
+    if (distance_to_spawn > ENEMY_CHASE_DIST) {
+        e->state = StateReturnToSpawn;
+        return;
+    }
+    Posf player_vec = posf_subtract(e->entity.pos, target->pos);
+    float player_dist = posf_magnitute(player_vec);
+    if (player_dist < ENEMY_ATTACK_DIST) {
+        e->state = StateAttack;
+        return;
+    }
+    Posf chase_vec = posf_set_magnitute(player_vec, ENEMY_VELOCITY);
+    e->entity.vel = chase_vec;
+}
+
+void enemy_cooldown(Enemy *e, Entity *target) {
+    e->cooldown_ticks -= 1;
+    if (e->cooldown_ticks < 0) {
+        e->state = e->cooldown_next_state;
+    }
+}
+
+void enemy_retreat(Enemy *e, Entity *target) {
+    Posf player_vec = posf_subtract(e->entity.pos, target->pos);
+    float player_dist = posf_magnitute(player_vec);
+    if (player_dist > ENEMY_RETREAT_DIST) {
+        bool should_strafe = random_bool(ENEMY_STRAFE_CHANCE);
+        if (should_strafe) {
+            e->inverse_strafe = random_bool(0.5f);
+            e->cooldown_ticks = 20;
+            e->state = StateStrafe;
+        } else {
+            e->state = StateChase;
+        }
+        return;
+    }
+    Posf retreat_vec = posf_reverse(player_vec);
+    e->entity.vel = posf_set_magnitute(retreat_vec, ENEMY_VELOCITY);
+}
+
+void enemy_strafe(Enemy *e, Entity *target) {
+    e->cooldown_ticks -= 1;
+    if (e->cooldown_ticks < 0) {
+        e->state = StateRetreat;
+        return;
+    }
+    Posf player_vec = posf_direction(e->entity.pos, target->pos);
+    Posf strafe_vec = {
+        .x = player_vec.y,
+        .y = -player_vec.x,
+    };
+    if (e->inverse_strafe) {
+        strafe_vec = posf_reverse(strafe_vec);
+    }
+    e->entity.vel = posf_set_magnitute(strafe_vec, ENEMY_VELOCITY);
+}
+
+void enemy_update(Enemy *e, Entity *target, Map map) {
+    switch (e->state) {
+    case StateReturnToSpawn:
+        enemy_return_to_spawn(e, target);
+        break;
+    case StateAttack:
+        enemy_attack(e, target);
+        break;
+    case StateChase:
+        enemy_chase(e, target);
+        break;
+    case StateStrafe:
+        enemy_strafe(e, target);
+        break;
+    case StateRetreat:
+        enemy_retreat(e, target);
+        break;
+    case StateIdle:
+        enemy_idle(e, target);
+        break;
+    case StateCooldown:
+        enemy_cooldown(e, target);
+        break;
+    }
+    entity_move(e, map);
 }
