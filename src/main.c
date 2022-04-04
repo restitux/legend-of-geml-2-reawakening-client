@@ -16,6 +16,8 @@
 #include <SDL2/SDL_rwops.h>
 #include <SDL2/SDL_surface.h>
 
+#include "json.h"
+
 #define SCREEN_WIDTH 1000
 #define SCREEN_HEIGHT 1000
 
@@ -118,12 +120,35 @@ typedef struct {
     Posf vel;
 } Player;
 
+typedef enum {
+    UNSYNCED,
+    SYNCED,
+    SYNC_FAILED,
+} MULTIPLAYER_SYNC_STATE;
+
+typedef struct {
+    int id;
+    Posi pos;
+    int power;
+    int state;
+    char *created_by;
+    char **contributors;
+    size_t contributors_len;
+} Shrine;
+
+typedef struct {
+    MULTIPLAYER_SYNC_STATE sync_state;
+    Shrine *shrines;
+    size_t shrines_len;
+} MultiplayerState;
+
 typedef struct {
     AssetStore asset_store;
     RenderData render_data;
     Map map;
     Camera camera;
     Player player;
+    MultiplayerState *multistate;
 } GameState;
 
 typedef struct {
@@ -230,6 +255,13 @@ void mainLoop(void *userdata) {
         if (!game_state->asset_store.assets[i].completed) {
             return;
         }
+    }
+
+    // exit if multiplayer state hasn't completed
+    if (game_state->multistate->sync_state == UNSYNCED) {
+        return;
+    } else if (game_state->multistate->sync_state == SYNC_FAILED) {
+        return;
     }
 
     // Process Input + Movement
@@ -452,6 +484,141 @@ AssetStore startAssetDownload(RenderData render_data) {
     return asset_store;
 }
 
+int parseShrineFromJson(struct json_object_s *j, Shrine *s) {
+    struct json_object_element_s *shrine_e = j->start;
+    while (true) {
+        if (shrine_e == NULL) {
+            break;
+        }
+        if (strcmp(shrine_e->name->string, "ID") == 0) {
+            printf("FOUND ID\n");
+            struct json_number_s *num =
+                (struct json_number_s *)shrine_e->value->payload;
+            s->id = atoi(num->number);
+        } else if (strcmp(shrine_e->name->string, "Pos") == 0) {
+            struct json_number_s *num =
+                (struct json_number_s *)shrine_e->value->payload;
+            s->pos.x = atoi(num->number);
+            s->pos.y = atoi(num->number);
+        } else if (strcmp(shrine_e->name->string, "Power") == 0) {
+            struct json_number_s *num =
+                (struct json_number_s *)shrine_e->value->payload;
+            s->power = atoi(num->number);
+        } else if (strcmp(shrine_e->name->string, "State") == 0) {
+            struct json_number_s *num =
+                (struct json_number_s *)shrine_e->value->payload;
+            s->state = atoi(num->number);
+        } else if (strcmp(shrine_e->name->string, "CreatedBy") == 0) {
+            struct json_object_s *obj =
+                (struct json_object_s *)shrine_e->value->payload;
+            struct json_object_element_s *obj_e = obj->start;
+            struct json_string_s *str =
+                (struct json_string_s *)obj_e->value->payload;
+            s->created_by = strdup(str->string);
+        } else if (strcmp(shrine_e->name->string, "Contributors") == 0) {
+            struct json_array_s *arr =
+                (struct json_array_s *)shrine_e->value->payload;
+            s->contributors = malloc(sizeof(char *) * arr->length);
+            s->contributors_len = arr->length;
+            struct json_array_element_s *arr_e = arr->start;
+            int i = 0;
+            while (true) {
+                if (arr_e == NULL) {
+                    break;
+                }
+                struct json_object_s *arr_e_obj =
+                    (struct json_object_s *)arr_e->value->payload;
+                struct json_string_s *str =
+                    (struct json_string_s *)arr_e_obj->start->value->payload;
+                s->contributors[i] = strdup(str->string);
+                i++;
+                arr_e = arr_e->next;
+            }
+        }
+        shrine_e = shrine_e->next;
+    }
+    return 0;
+}
+void stateDownloadSucceded(emscripten_fetch_t result) {
+
+    printf("url: (%s)\n", result.url);
+
+    MultiplayerState *state = (MultiplayerState *)result.userData;
+
+    struct json_value_s *root = json_parse(result.data, result.numBytes);
+    struct json_object_s *root_object = (struct json_object_s *)root->payload;
+
+    struct json_object_element_s *shrines = root_object->start;
+
+    struct json_array_s *shrines_array =
+        (struct json_array_s *)shrines->value->payload;
+    // create shrine buffer
+    state->shrines_len = shrines_array->length;
+    state->shrines = malloc(shrines_array->length * sizeof(Shrine));
+
+    size_t i = 0;
+    struct json_array_element_s *shrines_e = shrines_array->start;
+    while (true) {
+        if (shrines_e == NULL) {
+            break;
+        }
+
+        struct json_object_s *shrines_e_obj =
+            (struct json_object_s *)shrines_e->value->payload;
+        if (parseShrineFromJson(shrines_e_obj, state->shrines + i) < 0) {
+            state->sync_state = SYNC_FAILED;
+            return;
+        }
+
+        shrines_e = shrines_e->next;
+        i++;
+    }
+
+    printf("Found %lu shrines\n", state->shrines_len);
+    for (size_t i = 0; i < state->shrines_len; i++) {
+        printf("Shrines[%ld] {\n", i);
+        printf("    \"ID\": %d,\n", state->shrines[i].id);
+        printf("    \"Pos\": (%d, %d),\n", state->shrines[i].pos.x,
+               state->shrines[i].pos.y);
+        printf("    \"Power\": %d,\n", state->shrines[i].power);
+        printf("    \"State\": %d,\n", state->shrines[i].state);
+        printf("    CreatedBy: {\n");
+        printf("        \"Username\": \"%s\"\n", state->shrines[i].created_by);
+        printf("    },\n");
+        printf("    Contributors: {\n");
+        for (size_t j = 0; j < state->shrines[i].contributors_len; j++) {
+            printf("        \"Username\": \"%s\"\n",
+                   state->shrines[i].contributors[j]);
+        }
+        printf("    }\n");
+        printf("}\n");
+    }
+
+    state->sync_state = SYNCED;
+}
+
+MultiplayerState *startStateDownload() {
+    char *state_file = "/res/shrine_list.json";
+
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
+
+    strcpy((char *)&attr.requestMethod, "GET");
+
+    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+
+    attr.onsuccess = stateDownloadSucceded;
+    attr.userData = malloc(sizeof(MultiplayerState));
+    *((MultiplayerState *)attr.userData) = (MultiplayerState){
+        .sync_state = UNSYNCED,
+        .shrines = NULL,
+        .shrines_len = 0,
+    };
+
+    emscripten_fetch(&attr, state_file);
+    return (MultiplayerState *)attr.userData;
+}
+
 int main() {
     printf("Creating game state\n");
     GameState *game_state = malloc(sizeof(GameState));
@@ -624,6 +791,9 @@ int main() {
 
     printf("Starting asset downloads\n");
     game_state->asset_store = startAssetDownload(game_state->render_data);
+
+    printf("Starting game state downloads\n");
+    game_state->multistate = startStateDownload();
 
     int simulate_infinite_loop = 1; // call the function repeatedly
     int fps = -1; // call the functios as fast as the browser want to render

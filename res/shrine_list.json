@@ -1,0 +1,18 @@
+{
+    "Shrines": [
+        {
+            "ID": 1234,
+            "Pos": 5677,
+            "Power": 100,
+            "State": 1,
+            "CreatedBy": {
+                "Username": "Spaceman1701"
+            },
+            "Contributors": [
+                {
+                    "Usrename": "restitux"
+                }
+            ]
+        }
+    ]
+}
