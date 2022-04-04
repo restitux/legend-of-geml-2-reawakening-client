@@ -1120,7 +1120,7 @@ int main() {
 #define ENEMY_STRAFE_CHANCE 0.5f
 #define ATTACK_WINDUP_TICKS 8
 #define ENEMY_ATTACK_DAMAGE 20
-#define ENEMY_KNOCKBACK_AMOUNT 1
+#define ENEMY_KNOCKBACK_AMOUNT 0
 
 void entity_move(Entity *e, Map map) {
     printf("entity vel vector (%f, %f)", e->vel.x, e->vel.y);
